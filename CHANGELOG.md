@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.13] - 2025-12-29
+## [1.0.13] - 2025-12-30
 
 ### Fixed
 - Fixed `@` and backslash commands in chat interface
@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.12] - 2025-12-29
+## [1.0.12] - 2025-12-27
 
 ### Added
 - Visual syntax highlighting improvements
@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.11] - 2025-12-26
+## [1.0.11] - 2025-12-23
 
 ### Added
 - Universal ESLint integration
@@ -53,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.10] - 2025-12-26
+## [1.0.10] - 2025-12-20
 
 ### Changed
 - Major version upgrade and core improvements
@@ -62,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.09] - 2025-12-23
+## [1.0.09] - 2025-12-16
 
 ### Added
 - Toast notification system for upgrades
@@ -75,7 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.08] - 2025-12-22
+## [1.0.08] - 2025-12-13
 
 ### Changed
 - Model branding and naming updates
@@ -86,7 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.07] - 2025-12-22
+## [1.0.07] - 2025-12-09
 
 ### Fixed
 - Workspace directory saving and restoration
@@ -99,7 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.06] - 2025-12-22
+## [1.0.06] - 2025-12-06
 
 ### Fixed
 - Browse file and session restore functionality
@@ -108,7 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.05] - 2025-12-21
+## [1.0.05] - 2025-12-02
 
 ### Added
 - Completely reworked homepage UI
@@ -121,7 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.04] - 2025-12-21
+## [1.0.04] - 2025-11-28
 
 ### Changed
 - Major version merge and integration
@@ -130,7 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.03] - 2025-12-16
+## [1.0.03] - 2025-11-25
 
 ### Added
 - Chat scroll bar functionality
@@ -143,7 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.02] - 2025-12-16
+## [1.0.02] - 2025-11-21
 
 ### Added
 - Enhanced agent system setup
@@ -191,18 +191,18 @@ Each release includes:
 
 | Version | Date | Type | Highlights |
 |---------|------|------|------------|
-| 1.0.13 | 2025-12-29 | Patch | Chat command fixes |
-| 1.0.12 | 2025-12-29 | Patch | Visual improvements, file navigation |
-| 1.0.11 | 2025-12-26 | Patch | ESLint integration |
-| 1.0.10 | 2025-12-26 | Patch | Major upgrade |
-| 1.0.09 | 2025-12-23 | Patch | Toast notifications, changelog |
-| 1.0.08 | 2025-12-22 | Patch | Model branding |
-| 1.0.07 | 2025-12-22 | Patch | Workspace directory fixes |
-| 1.0.06 | 2025-12-22 | Patch | Session restore fixes |
-| 1.0.05 | 2025-12-21 | Patch | Homepage UI redesign |
-| 1.0.04 | 2025-12-21 | Patch | Version merge |
-| 1.0.03 | 2025-12-16 | Patch | Chat scroll bar |
-| 1.0.02 | 2025-12-16 | Patch | Agent system enhancements |
+| 1.0.13 | 2025-12-30 | Patch | Chat command fixes |
+| 1.0.12 | 2025-12-27 | Patch | Visual improvements, file navigation |
+| 1.0.11 | 2025-12-23 | Patch | ESLint integration |
+| 1.0.10 | 2025-12-20 | Patch | Major upgrade |
+| 1.0.09 | 2025-12-16 | Patch | Toast notifications, changelog |
+| 1.0.08 | 2025-12-13 | Patch | Model branding |
+| 1.0.07 | 2025-12-09 | Patch | Workspace directory fixes |
+| 1.0.06 | 2025-12-06 | Patch | Session restore fixes |
+| 1.0.05 | 2025-12-02 | Patch | Homepage UI redesign |
+| 1.0.04 | 2025-11-28 | Patch | Version merge |
+| 1.0.03 | 2025-11-25 | Patch | Chat scroll bar |
+| 1.0.02 | 2025-11-21 | Patch | Agent system enhancements |
 | 1.0.01 | 2025-11-14 | Initial | First release |
 
 ---
