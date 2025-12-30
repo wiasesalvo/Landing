@@ -99,9 +99,9 @@ You can also grab the binary from the [Releases](https://github.com/Persistence-
 
 With PersistenceAI you can use any LLM provider by configuring their API keys.
 
-If you are new to using LLM providers, we recommend using PersistenceAI Zen. It's a curated list of models that have been tested and verified by the PersistenceAI team.
+If you are new to using LLM providers, we recommend using PersistenceAI Zero. It's a curated list of models that have been tested and verified by the PersistenceAI team.
 
-1. Run the `/connect` command in the TUI, select PersistenceAI Zen, and head to the provider's authentication page.
+1. Run the `/connect` command in the TUI, select PersistenceAI Zero, and head to the provider's authentication page.
    ```
    /connect
    ```

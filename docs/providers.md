@@ -27,7 +27,7 @@ PersistenceAI supports all major LLM providers:
 - **Anthropic** - Claude models
 - **Google** - Gemini models
 - **Ollama** - Local models (self-hosted)
-- **PersistenceAI Zen** - Curated list of tested models
+- **PersistenceAI Zero** - Curated list of tested models
 - And many more...
 
 ## Provider Configuration
@@ -80,11 +80,11 @@ PersistenceAI has excellent support for Ollama, allowing you to run models local
 - **qwen2.5-coder:7b** - More capable for complex tasks
 - **qwen2.5-coder:13b+** - Maximum capability
 
-## PersistenceAI Zen
+## PersistenceAI Zero
 
-PersistenceAI Zen is a curated list of models that have been tested and verified by the PersistenceAI team.
+PersistenceAI Zero is a curated list of models that have been tested and verified by the PersistenceAI team.
 
-1. Run `/connect` and select "PersistenceAI Zen"
+1. Run `/connect` and select "PersistenceAI Zero"
 2. Visit the authentication page
 3. Sign in and get your API key
 4. Paste the key in PersistenceAI
