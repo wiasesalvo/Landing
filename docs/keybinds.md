@@ -186,6 +186,15 @@ These shortcuts work when the editor is focused.
 | `Ctrl+F` | Toggle search | Opens/closes the search bar |
 | `Escape` | Close search | Closes search bar when search is visible |
 
+### Code Navigation & LSP Features
+
+| Shortcut | Action | Description |
+|----------|--------|-------------|
+| `Ctrl+Space` | Trigger autocomplete | Opens code completion suggestions at cursor position |
+| `F12` or `Ctrl+G` | Go to definition | Navigate to the definition of the symbol under cursor (LSP) |
+| `Ctrl+I` | Show hover info | Display type information and documentation for symbol under cursor |
+| `Ctrl+Shift+M` or `F8` | Toggle diagnostics | Show/hide the diagnostics panel with errors and warnings |
+
 ### Undo/Redo
 
 | Shortcut | Action | Description |
@@ -258,6 +267,10 @@ Press `Ctrl+P` to open the command palette with all available commands.
 **Editor:**
 - `Ctrl+S` - Save file
 - `Ctrl+F` - Search
+- `Ctrl+Space` - Autocomplete
+- `F12` or `Ctrl+G` - Go to definition
+- `Ctrl+I` - Hover info
+- `Ctrl+Shift+M` or `F8` - Toggle diagnostics
 - `Ctrl+Z` - Undo
 - `Ctrl+Y` - Redo
 
