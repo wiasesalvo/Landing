@@ -1,3 +1,9 @@
+---
+layout: default
+title: Configuration
+permalink: /docs/config.html
+---
+
 # Configuration
 
 PersistenceAI can be configured through a JSON configuration file.

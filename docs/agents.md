@@ -1,3 +1,9 @@
+---
+layout: default
+title: Agents
+permalink: /docs/agents.html
+---
+
 # Agents
 
 PersistenceAI uses an agent system where different agents have specialized roles and capabilities.

@@ -1,3 +1,9 @@
+---
+layout: default
+title: Providers
+permalink: /docs/providers.html
+---
+
 # Providers
 
 PersistenceAI supports multiple LLM providers. You can configure API keys for any provider you want to use.

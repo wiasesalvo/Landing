@@ -1,3 +1,9 @@
+---
+layout: default
+title: Commands
+permalink: /docs/commands.html
+---
+
 # Commands
 
 PersistenceAI provides a set of commands that you can use to interact with the application. Commands start with `/` and can be accessed via the command palette (`Ctrl+P`) or by typing them directly in the chat input.

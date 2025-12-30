@@ -1,3 +1,9 @@
+---
+layout: default
+title: Getting Started
+permalink: /docs/index.html
+---
+
 # PersistenceAI Documentation
 
 Welcome to PersistenceAI documentation! PersistenceAI is an open source AI coding agent available as a terminal-based interface, desktop app, or IDE extension.

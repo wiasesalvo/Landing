@@ -1,3 +1,9 @@
+---
+layout: default
+title: Troubleshooting
+permalink: /docs/troubleshooting.html
+---
+
 # Troubleshooting
 
 Common issues and solutions for PersistenceAI.

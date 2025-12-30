@@ -3,6 +3,11 @@ description: Comprehensive documentation for PersistenceAI
 theme: jekyll-theme-minimal
 plugins:
   - jekyll-relative-links
+  - jekyll-readme-index
 relative_links:
   enabled: true
   collections: true
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false

@@ -1,3 +1,9 @@
+---
+layout: default
+title: Keybinds
+permalink: /docs/keybinds.html
+---
+
 # Keybinds
 
 PersistenceAI has a comprehensive list of keybinds that you can customize through the PersistenceAI config.
