@@ -54,12 +54,12 @@ Set your preferred theme:
 
 ```json
 {
-  "theme": "opencode"
+  "theme": "pai"
 }
 ```
 
 Available themes:
-- `opencode` (default)
+- `pai` (default)
 - `dark`
 - `light`
 - And more...
