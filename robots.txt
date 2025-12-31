@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /docs/
+Allow: /assets/
+
+# Sitemap
+Sitemap: https://persistence-ai.github.io/Landing/sitemap.xml
+
+# Disallow admin or private areas if any
+# Disallow: /admin/
+# Disallow: /private/
