@@ -31,6 +31,22 @@
     <meta name="twitter:creator" content="@AiPersiste65218">
     <meta name="twitter:site" content="@AiPersiste65218">
     
+    <!-- Breadcrumbs Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://persistence-ai.github.io/Landing/"
+        }
+      ]
+    }
+    </script>
+
     <!-- Structured Data (JSON-LD) -->
     <script type="application/ld+json">
     {
@@ -2350,6 +2366,96 @@ persistenceai github install
         <p>PersistenceAI runs securely inside your GitHub Actions runners, with full access to your repository context.</p>
     </section>
 
+    <!-- FAQ Schema Markup -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is PersistenceAI?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "PersistenceAI (also known as PAI) is an enterprise-grade terminal AI IDE and agentic coding multiplexer created by Leo Louvar. It provides full IDE features with multi-agent AI integration, multi-session AI conversations, terminal-first design, and vibe coding capabilities."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Who created PersistenceAI?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "PersistenceAI was created by Leo Louvar. It combines the flexibility of terminal-based development with the power of multi-agent AI systems, enabling AI agentic coding and vibe coding workflows."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What terminal do I need?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "PersistenceAI requires a modern terminal emulator that supports TUI (Terminal User Interface). Recommended terminals include WezTerm, Alacritty, Ghostty, Kitty, or Windows Terminal. On Windows, PowerShell 5.1 won't work—use Windows Terminal or PowerShell 7+."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which LLM providers are supported?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "PersistenceAI supports 75+ LLM providers through Models.dev, including OpenAI, Anthropic (Claude), Google (Gemini), and local models via Ollama. You can also configure custom providers with OpenAI-compatible APIs."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I use PersistenceAI without an API key?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes! You can use local models with Ollama. Install Ollama, download a model, and configure PersistenceAI to use it. No API keys required for local development."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does multi-session work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "You can run multiple AI conversations simultaneously in separate sessions. Each session maintains its own context and history. Create new sessions with leader+N (default: Ctrl+X then N) or list/switch sessions with leader+L (default: Ctrl+X then L). Perfect for working on different features or tasks in parallel."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does PersistenceAI work over SSH?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes! PersistenceAI is designed for remote development. Simply SSH into your remote server and run PersistenceAI. All IDE features work over SSH, making it perfect for cloud instances and remote servers."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I customize the keybindings?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes! PersistenceAI supports fully customizable keybindings through your config file. You can remap any command to your preferred key combination."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What's the difference between Build, Plan, and Oligarchy agents?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The Plan agent creates a step-by-step plan before making changes, perfect for complex features. The Build agent directly implements changes, ideal for straightforward tasks. The Oligarchy agent combines both with a voting system—both Build and Plan propose solutions and vote on each other's proposals, ensuring consensus before execution."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is PersistenceAI open source?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "PersistenceAI is not fully open source, though some areas may be open sourced in the future. The project is actively developed and available for use."
+          }
+        }
+      ]
+    }
+    </script>
+
     <!-- FAQ Section -->
     <section id="faq" style="background: var(--bg-secondary); padding: 4rem 2rem;">
         <div style="max-width: 900px; margin: 0 auto;">
@@ -2364,6 +2470,14 @@ persistenceai github install
                 Frequently Asked Questions
             </h2>
             <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <div class="feature-card" style="padding: 1.5rem;">
+                    <h3 style="margin-bottom: 0.75rem; color: var(--accent);">What is PersistenceAI?</h3>
+                    <p style="color: var(--text-secondary); margin: 0;">PersistenceAI (also known as PAI) is an enterprise-grade terminal AI IDE and agentic coding multiplexer created by <strong>Leo Louvar</strong>. It provides full IDE features with multi-agent AI integration, multi-session AI conversations, terminal-first design, and vibe coding capabilities.</p>
+                </div>
+                <div class="feature-card" style="padding: 1.5rem;">
+                    <h3 style="margin-bottom: 0.75rem; color: var(--accent);">Who created PersistenceAI?</h3>
+                    <p style="color: var(--text-secondary); margin: 0;">PersistenceAI was created by <strong>Leo Louvar</strong>. It combines the flexibility of terminal-based development with the power of multi-agent AI systems, enabling AI agentic coding and vibe coding workflows.</p>
+                </div>
                 <div class="feature-card" style="padding: 1.5rem;">
                     <h3 style="margin-bottom: 0.75rem; color: var(--accent);">What terminal do I need?</h3>
                     <p style="color: var(--text-secondary); margin: 0;">PersistenceAI requires a modern terminal emulator that supports TUI (Terminal User Interface). Recommended terminals include WezTerm, Alacritty, Ghostty, Kitty, or Windows Terminal. On Windows, PowerShell 5.1 won't work—use Windows Terminal or PowerShell 7+.</p>
