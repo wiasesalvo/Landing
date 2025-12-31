@@ -205,7 +205,51 @@
 <li><p>System structure</p></li>
 <li><p>Technical planning</p></li>
 
-</ul><h2><p>Agent Skills</p></h2>
+</ul><h2><p>Subagents</p></h2>
+
+<p>Subagents are specialized agents that can be invoked using <code>@</code> mentions for specific tasks. They operate independently and are designed for focused, single-purpose operations.</p>
+
+<h3><p>Git Committer (<code>@git-committer</code>)</p></h3>
+
+<p>A specialized subagent for git operations. Use this agent when you need to commit and push code changes to a git repository.</p>
+
+<strong>Usage:</strong>
+<pre><code>@git-committer commit these changes with message &quot;Fix alignment issue in editor pane&quot;</code></pre>
+
+<strong>What it does:</strong>
+<ul><li><p>Commits code changes to your local git repository</p></li>
+<li><p>Pushes commits to the remote repository (typically <code>origin</code>)</p></li>
+<li><p>Automatically performs <code>git pull --rebase</code> if there are remote changes before pushing</p></li>
+<li><p>Writes commit messages with appropriate prefixes and focused on WHY the change was made</p></li>
+
+</ul><strong>Commit Message Format:</strong>
+<p>Commit messages must include a prefix indicating the type of change:</p>
+<ul><li><code>docs:</code> - Documentation changes</li>
+<li><code>tui:</code> - Terminal UI changes</li>
+<li><code>core:</code> - Core functionality changes</li>
+<li><code>ci:</code> - Continuous integration changes</li>
+<li><code>ignore:</code> - Changes in packages/app</li>
+<li><code>wip:</code> - Work in progress</li>
+
+</ul><strong>Special Prefix Rules:</strong>
+<ul><li><p>For changes in <code>packages/web</code> → use <code>docs:</code> prefix</p></li>
+<li><p>For changes in <code>packages/app</code> → use <code>ignore:</code> prefix</p></li>
+
+</ul><strong>Important Notes:</strong>
+<ul><li><p>Commit messages should be brief since they're used to generate release notes</p></li>
+<li><p>Messages should say <strong>WHY</strong> the change was made from an end-user perspective, not <strong>WHAT</strong> was changed</p></li>
+<li><p>Avoid generic messages like "improved agent experience" - be very specific about user-facing changes</p></li>
+<li><p>The agent automatically handles <code>git pull --rebase</code> before pushing</p></li>
+<li><p>If merge conflicts occur during rebase, the agent will <strong>not</strong> fix them automatically - it will notify you to resolve them manually</p></li>
+<li><p>The agent uses your repository's configured remote (check with <code>git remote -v</code>)</p></li>
+<li><p>Your repository must be initialized with <code>git init</code> and have a remote configured</p></li>
+
+</ul><strong>Examples:</strong>
+<pre><code>@git-committer commit and push with message &quot;tui: Add workspace file filtering to @ mention feature&quot;
+@git-committer commit these changes with message &quot;docs: Update agent documentation with git-committer details&quot;
+@git-committer commit and push with message &quot;core: Fix memory retrieval bottleneck in LanceDBBackend&quot;</code></pre>
+
+<h2><p>Agent Skills</p></h2>
 
 <p>Agents have access to different skills (tools) based on their role:</p>
 
@@ -222,6 +266,12 @@
 <pre><code>@debugger Can you help me fix this error?</code></pre>
 
 <p>This ensures the right agent handles your request.</p>
+
+<strong>Available Mentions:</strong>
+<ul><li><p>Primary agents: <code>@general</code>, <code>@code-reviewer</code>, <code>@debugger</code>, <code>@architect</code></p></li>
+<li><p>Subagents: <code>@git-committer</code> (and any custom subagents you've configured)</p></li>
+
+</ul><p>When you type <code>@</code> in the prompt, you'll see an autocomplete list of available agents and files in your workspace.</p>
 
 <h2><p>Agent Configuration</p></h2>
 

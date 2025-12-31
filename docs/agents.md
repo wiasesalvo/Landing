@@ -73,6 +73,54 @@ Helps with system design. Good for:
 - System structure
 - Technical planning
 
+## Subagents
+
+Subagents are specialized agents that can be invoked using `@` mentions for specific tasks. They operate independently and are designed for focused, single-purpose operations.
+
+### Git Committer (`@git-committer`)
+
+A specialized subagent for git operations. Use this agent when you need to commit and push code changes to a git repository.
+
+**Usage:**
+```
+@git-committer commit these changes with message "Fix alignment issue in editor pane"
+```
+
+**What it does:**
+- Commits code changes to your local git repository
+- Pushes commits to the remote repository (typically `origin`)
+- Automatically performs `git pull --rebase` if there are remote changes before pushing
+- Writes commit messages with appropriate prefixes and focused on WHY the change was made
+
+**Commit Message Format:**
+Commit messages must include a prefix indicating the type of change:
+- `docs:` - Documentation changes
+- `tui:` - Terminal UI changes
+- `core:` - Core functionality changes
+- `ci:` - Continuous integration changes
+- `ignore:` - Changes in packages/app
+- `wip:` - Work in progress
+
+**Special Prefix Rules:**
+- For changes in `packages/web` → use `docs:` prefix
+- For changes in `packages/app` → use `ignore:` prefix
+
+**Important Notes:**
+- Commit messages should be brief since they're used to generate release notes
+- Messages should say **WHY** the change was made from an end-user perspective, not **WHAT** was changed
+- Avoid generic messages like "improved agent experience" - be very specific about user-facing changes
+- The agent automatically handles `git pull --rebase` before pushing
+- If merge conflicts occur during rebase, the agent will **not** fix them automatically - it will notify you to resolve them manually
+- The agent uses your repository's configured remote (check with `git remote -v`)
+- Your repository must be initialized with `git init` and have a remote configured
+
+**Examples:**
+```
+@git-committer commit and push with message "tui: Add workspace file filtering to @ mention feature"
+@git-committer commit these changes with message "docs: Update agent documentation with git-committer details"
+@git-committer commit and push with message "core: Fix memory retrieval bottleneck in LanceDBBackend"
+```
+
 ## Agent Skills
 
 Agents have access to different skills (tools) based on their role:
@@ -92,6 +140,12 @@ You can mention specific agents in your prompts using `@`:
 ```
 
 This ensures the right agent handles your request.
+
+**Available Mentions:**
+- Primary agents: `@general`, `@code-reviewer`, `@debugger`, `@architect`
+- Subagents: `@git-committer` (and any custom subagents you've configured)
+
+When you type `@` in the prompt, you'll see an autocomplete list of available agents and files in your workspace.
 
 ## Agent Configuration
 
