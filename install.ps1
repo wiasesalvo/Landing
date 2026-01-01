@@ -122,16 +122,26 @@ Write-Info "Downloading PersistenceAI from: $downloadUrl"
 $zipPath = Join-Path $TEMP_DIR $zipName
 try {
     $ProgressPreference = 'SilentlyContinue'
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -ErrorAction Stop
+    
+    # Use serverless function to download from private GitHub Releases
+    $response = Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -ErrorAction Stop
+    
+    # Check if we got an error response (JSON instead of zip)
+    $contentType = $response.Headers['Content-Type']
+    if ($contentType -like '*json*') {
+        $errorContent = Get-Content $zipPath -Raw | ConvertFrom-Json
+        throw $errorContent.error
+    }
+    
     Write-Success "Download completed"
 } catch {
     Write-Error "Download failed: $_"
     Write-Error "URL attempted: $downloadUrl"
     Write-Info ""
     Write-Info "Please check:"
-    Write-Info "1. The version exists in GitHub Releases: https://github.com/Persistence-AI/Landing/releases"
-    Write-Info "2. The file name matches: persistenceai-windows-x64-v$Version.zip"
-    Write-Info "3. Your internet connection is working"
+    Write-Info "1. The version exists: v$Version"
+    Write-Info "2. Your internet connection is working"
+    Write-Info "3. The serverless function is accessible"
     Remove-Item -Path $TEMP_DIR -Recurse -Force -ErrorAction SilentlyContinue
     exit 1
 }
