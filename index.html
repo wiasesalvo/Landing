@@ -2699,10 +2699,12 @@ persistenceai github install
         // Fetch stats from GitHub Gist
         async function fetchStatsFromGist() {
             if (!GITHUB_STATS_ENABLED) {
+                console.log('[Stats] GitHub Gist stats disabled (GIST_ID not set)');
                 return;
             }
             
             try {
+                console.log('[Stats] Fetching stats from GitHub Gist...');
                 const response = await fetch(`${GITHUB_API_BASE}/gists/${GITHUB_STATS_GIST_ID}`, {
                     headers: {
                         'Accept': 'application/vnd.github.v3+json'
@@ -2714,6 +2716,8 @@ persistenceai github install
                     const filename = Object.keys(gist.files)[0];
                     const content = gist.files[filename].content;
                     const stats = JSON.parse(content);
+                    
+                    console.log('[Stats] Successfully fetched stats from Gist:', stats);
                     
                     // Update copy counts
                     if (stats.copyCounts) {
@@ -2739,11 +2743,12 @@ persistenceai github install
                     // Update localStorage with server values
                     localStorage.setItem('persistenceai_copy_counts', JSON.stringify(copyCounts));
                 } else if (response.status === 404) {
-                    console.log('Gist not found. Run setup-github-stats.ps1 to create it.');
+                    console.warn('[Stats] Gist not found (404). Run setup-github-stats.ps1 to create it.');
+                } else {
+                    console.warn(`[Stats] Gist fetch failed with status: ${response.status}`);
                 }
             } catch (err) {
-                // Silently fail - stats will be available when Gist is set up
-                console.log('Could not fetch stats from GitHub Gist:', err.message);
+                console.error('[Stats] Error fetching stats from GitHub Gist:', err.message);
             }
         }
 
