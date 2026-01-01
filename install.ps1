@@ -67,20 +67,43 @@ if ($args.Count -gt 0) {
     Write-Info "Installing version: $Version"
 }
 
-# Build download URL - use GitHub Releases directly
-if ($Version -eq "latest") {
-    # For latest, get the actual latest version from GitHub
-    try {
-        $ghResponse = Invoke-RestMethod -Uri "https://api.github.com/repos/Persistence-AI/Landing/releases/latest" -ErrorAction Stop
-        $actualVersion = $ghResponse.tag_name -replace '^v', ''
-        $downloadUrl = "https://github.com/Persistence-AI/Landing/releases/download/v$actualVersion/persistenceai-windows-x64-v$actualVersion.zip"
-        $Version = $actualVersion
-    } catch {
-        Write-Error "Could not determine latest version from GitHub"
-        exit 1
+# Build download URL - query GitHub Releases for actual asset filename
+Write-Info "Finding download URL from GitHub Releases..."
+try {
+    if ($Version -eq "latest") {
+        $releaseUrl = "https://api.github.com/repos/Persistence-AI/Landing/releases/latest"
+    } else {
+        $releaseUrl = "https://api.github.com/repos/Persistence-AI/Landing/releases/tags/v$Version"
     }
-} else {
-    $downloadUrl = "https://github.com/Persistence-AI/Landing/releases/download/v$Version/persistenceai-windows-x64-v$Version.zip"
+    
+    $release = Invoke-RestMethod -Uri $releaseUrl -ErrorAction Stop
+    
+    # Update version from release tag
+    $Version = $release.tag_name -replace '^v', ''
+    Write-Info "Found release version: $Version"
+    
+    # Find the Windows x64 zip asset
+    $windowsAsset = $release.assets | Where-Object { 
+        $_.name -like "*windows*x64*.zip" -or 
+        $_.name -like "*win*x64*.zip" -or
+        $_.name -like "*windows*.zip"
+    } | Select-Object -First 1
+    
+    if (-not $windowsAsset) {
+        # Try to find any zip file as fallback
+        $windowsAsset = $release.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
+    }
+    
+    if ($windowsAsset) {
+        $downloadUrl = $windowsAsset.browser_download_url
+        Write-Info "Found asset: $($windowsAsset.name)"
+    } else {
+        throw "No Windows x64 zip file found in release assets"
+    }
+} catch {
+    Write-Error "Failed to find release: $_"
+    Write-Error "Please check: https://github.com/Persistence-AI/Landing/releases"
+    exit 1
 }
 
 # Check if already installed
