@@ -227,6 +227,14 @@ try {
     }
     
     # Install both commands: 'pai' and 'persistenceai'
+    # Remove existing binaries first to ensure clean overwrite
+    if (Test-Path $INSTALL_DIR) {
+        $existingBinaries = Get-ChildItem -Path $INSTALL_DIR -Filter "*.exe" -ErrorAction SilentlyContinue
+        foreach ($existing in $existingBinaries) {
+            Remove-Item -Path $existing.FullName -Force -ErrorAction SilentlyContinue
+        }
+    }
+    
     if (Test-Path $exePath) {
         $targetPath = Join-Path $INSTALL_DIR "$APP_NAME.exe"
         Copy-Item -Path $exePath -Destination $targetPath -Force
@@ -242,6 +250,21 @@ try {
         $paiTargetPath = Join-Path $INSTALL_DIR "pai.exe"
         Copy-Item -Path $exePath -Destination $paiTargetPath -Force
         Write-Success "Installed 'pai' command (created from persistenceai.exe)"
+    }
+    
+    # Verify installed binary is production
+    if (Test-Path $targetPath) {
+        try {
+            $installedVersion = & $targetPath --version 2>&1 | Select-Object -First 1
+            if ($installedVersion -match "0\.0\.0-local") {
+                Write-Warning "⚠️  Installed binary appears to be DEV version (0.0.0-local-*)"
+                Write-Warning "   This should not happen with production ZIP. Please report this issue."
+            } elseif ($installedVersion -match "1\.\d+\.\d+") {
+                Write-Success "Verified installed binary is production version: $installedVersion"
+            }
+        } catch {
+            # Ignore verification errors
+        }
     }
     
     Write-Success "Extraction completed - both 'pai' and 'persistenceai' commands available"
