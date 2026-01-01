@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting...</title>
+    <script>
+    (function() {
+        const pathname = window.location.pathname;
+        const correctPath = '/Landing/';
+        
+        // Check if path is a case variation of /Landing/
+        const pathLower = pathname.toLowerCase();
+        const correctPathLower = correctPath.toLowerCase();
+        
+        // If path matches /landing/ or /LANDING/ etc (case-insensitive) but not exact match
+        if (pathLower === correctPathLower && pathname !== correctPath) {
+            // Redirect to correct case
+            window.location.replace(correctPath + window.location.search + window.location.hash);
+            return;
+        }
+        
+        // If it's a 404 for /landing/ specifically, redirect
+        if (pathLower.includes('landing') && pathname !== correctPath) {
+            // Extract query and hash
+            const query = window.location.search;
+            const hash = window.location.hash;
+            window.location.replace(correctPath + query + hash);
+            return;
+        }
+        
+        // Otherwise, show 404 page
+        document.body.innerHTML = `
+            <div style="text-align: center; padding: 50px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                <h1>404</h1>
+                <p>Page not found</p>
+                <p><a href="/Landing/">Go to Home</a></p>
+            </div>
+        `;
+    })();
+    </script>
+</head>
+<body>
+    <div style="text-align: center; padding: 50px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <h1>Redirecting...</h1>
+        <p>If you are not redirected, <a href="/Landing/">click here</a>.</p>
+    </div>
+</body>
+</html>
