@@ -67,24 +67,73 @@ if ($args.Count -gt 0) {
     Write-Info "Installing version: $Version"
 }
 
-# Build download URL - use serverless function to proxy private GitHub Releases
-Write-Info "Getting download URL from serverless API..."
+# Build download URL - direct from GitHub Releases (like OpenCode)
+Write-Info "Getting download URL from GitHub Releases..."
 
 # If version is "latest", fetch the actual version first
 if ($Version -eq "latest") {
-    Write-Info "Fetching latest version from API..."
+    Write-Info "Fetching latest version..."
     try {
+        # Try website API first
         $latestResponse = Invoke-RestMethod -Uri "$BASE_URL/api/latest.json" -ErrorAction SilentlyContinue
         if ($latestResponse.version) {
             $Version = $latestResponse.version
         }
     } catch {
-        # Keep "latest" and let API handle it
+        # Fallback: try GitHub API directly
+        try {
+            $ghResponse = Invoke-RestMethod -Uri "https://api.github.com/repos/Persistence-AI/Landing/releases/latest" -ErrorAction SilentlyContinue
+            if ($ghResponse.tag_name) {
+                $Version = $ghResponse.tag_name -replace '^v', ''
+            }
+        } catch {
+            Write-Warning "Could not fetch latest version, will try 'latest' download URL"
+        }
     }
 }
 
-# Build the download URL using serverless function
-$downloadUrl = "https://serverless-woad-one.vercel.app/api/download?version=$Version&platform=windows&arch=x64"
+# Build direct GitHub Releases URL (like OpenCode)
+# Query GitHub API to find the actual asset filename
+Write-Info "Finding Windows x64 asset in release v$Version..."
+try {
+    if ($Version -eq "latest") {
+        $releaseUrl = "https://api.github.com/repos/Persistence-AI/Landing/releases/latest"
+    } else {
+        $releaseUrl = "https://api.github.com/repos/Persistence-AI/Landing/releases/tags/v$Version"
+    }
+    
+    $release = Invoke-RestMethod -Uri $releaseUrl -ErrorAction Stop
+    
+    # Update version from release tag if needed
+    if ($Version -eq "latest") {
+        $Version = $release.tag_name -replace '^v', ''
+        Write-Info "Latest version: $Version"
+    }
+    
+    # Find Windows x64 zip asset
+    $windowsAsset = $release.assets | Where-Object { 
+        ($_.name -like "*windows*x64*.zip") -or 
+        ($_.name -like "*win*x64*.zip")
+    } | Select-Object -First 1
+    
+    if ($windowsAsset) {
+        $downloadUrl = $windowsAsset.browser_download_url
+        Write-Info "Found asset: $($windowsAsset.name)"
+    } else {
+        # Fallback: try standard naming pattern
+        $downloadUrl = "https://github.com/Persistence-AI/Landing/releases/download/v$Version/persistenceai-windows-x64-v$Version.zip"
+        Write-Warning "Asset not found via API, trying standard URL pattern"
+    }
+} catch {
+    # Fallback to standard URL pattern if API fails
+    if ($Version -eq "latest") {
+        $downloadUrl = "https://github.com/Persistence-AI/Landing/releases/latest/download/persistenceai-windows-x64.zip"
+    } else {
+        $downloadUrl = "https://github.com/Persistence-AI/Landing/releases/download/v$Version/persistenceai-windows-x64-v$Version.zip"
+    }
+    Write-Warning "Could not query GitHub API, using standard URL pattern"
+}
+
 Write-Info "Download URL: $downloadUrl"
 
 # Check if already installed
@@ -121,26 +170,16 @@ Write-Info "Downloading PersistenceAI from: $downloadUrl"
 $zipPath = Join-Path $TEMP_DIR $zipName
 try {
     $ProgressPreference = 'SilentlyContinue'
-    
-    # Use serverless function to download from private GitHub Releases
-    $response = Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -ErrorAction Stop
-    
-    # Check if we got an error response (JSON instead of zip)
-    $contentType = $response.Headers['Content-Type']
-    if ($contentType -like '*json*') {
-        $errorContent = Get-Content $zipPath -Raw | ConvertFrom-Json
-        throw $errorContent.error
-    }
-    
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -ErrorAction Stop
     Write-Success "Download completed"
 } catch {
     Write-Error "Download failed: $_"
     Write-Error "URL attempted: $downloadUrl"
     Write-Info ""
     Write-Info "Please check:"
-    Write-Info "1. The version exists: v$Version"
-    Write-Info "2. Your internet connection is working"
-    Write-Info "3. The serverless function is accessible"
+    Write-Info "1. The version exists in GitHub Releases: https://github.com/Persistence-AI/Landing/releases"
+    Write-Info "2. The file name matches: persistenceai-windows-x64-v$Version.zip (or similar)"
+    Write-Info "3. Your internet connection is working"
     Remove-Item -Path $TEMP_DIR -Recurse -Force -ErrorAction SilentlyContinue
     exit 1
 }
