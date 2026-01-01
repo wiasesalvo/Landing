@@ -1,6 +1,6 @@
 {
   "functions": {
-    "write-stats.js": {
+    "api/write-stats.js": {
       "maxDuration": 10
     }
   }
