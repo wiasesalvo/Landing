@@ -143,16 +143,29 @@ if ($existingPath) {
     $currentVersion = & $existingPath.Source --version 2>&1 | Select-Object -First 1
     Write-Info "Current version: $currentVersion"
     
-    if ($Version -ne "latest" -and $currentVersion -eq $Version) {
-        Write-Success "Version $Version is already installed!"
-        exit 0
-    }
+    # Detect if running non-interactively (piped from web via iwr | iex)
+    # When stdin is redirected, Read-Host will fail or hang
+    $isNonInteractive = [Console]::IsInputRedirected
     
-    Write-Info "To upgrade, run: $APP_NAME upgrade"
-    $upgrade = Read-Host "Upgrade now? (y/N)"
-    if ($upgrade -ne "y" -and $upgrade -ne "Y") {
-        exit 0
+    # Handle different scenarios
+    if ($currentVersion -ne $Version) {
+        # Versions differ - always upgrade (user wants new version)
+        Write-Info "Upgrading from $currentVersion to $Version..."
+    } elseif ($isNonInteractive) {
+        # Same version but non-interactive (website link) - always reinstall
+        # This allows bug fixes and updates to same version to be applied
+        Write-Info "Reinstalling version $Version (applying latest changes)..."
+    } else {
+        # Same version and interactive - ask user
+        Write-Info "Version $Version is already installed."
+        $reinstall = Read-Host "Reinstall anyway? (y/N)"
+        if ($reinstall -ne "y" -and $reinstall -ne "Y") {
+            Write-Success "Installation skipped."
+            exit 0
+        }
+        Write-Info "Reinstalling version $Version..."
     }
+    # Continue with installation (will overwrite existing binary)
 }
 
 # Create directories
@@ -197,19 +210,41 @@ try {
     Expand-Archive -Path $zipPath -DestinationPath $TEMP_DIR -Force
     
     # Find executable (could be in bin/ subdirectory or root)
+    # Try persistenceai.exe first (for backward compatibility)
     $exePath = Join-Path $TEMP_DIR "bin\$APP_NAME.exe"
     if (-not (Test-Path $exePath)) {
         $exePath = Join-Path $TEMP_DIR "$APP_NAME.exe"
     }
     
-    if (-not (Test-Path $exePath)) {
+    # Also check for pai.exe (alternative command name)
+    $paiExePath = Join-Path $TEMP_DIR "bin\pai.exe"
+    if (-not (Test-Path $paiExePath)) {
+        $paiExePath = Join-Path $TEMP_DIR "pai.exe"
+    }
+    
+    if (-not (Test-Path $exePath) -and -not (Test-Path $paiExePath)) {
         throw "Executable not found in archive. Contents: $((Get-ChildItem $TEMP_DIR -Recurse | Select-Object -First 10 | ForEach-Object { $_.FullName }) -join ', ')"
     }
     
-    # Move to install directory
-    $targetPath = Join-Path $INSTALL_DIR "$APP_NAME.exe"
-    Move-Item -Path $exePath -Destination $targetPath -Force
-    Write-Success "Extraction completed"
+    # Install both commands: 'pai' and 'persistenceai'
+    if (Test-Path $exePath) {
+        $targetPath = Join-Path $INSTALL_DIR "$APP_NAME.exe"
+        Copy-Item -Path $exePath -Destination $targetPath -Force
+        Write-Success "Installed 'persistenceai' command"
+    }
+    
+    if (Test-Path $paiExePath) {
+        $paiTargetPath = Join-Path $INSTALL_DIR "pai.exe"
+        Copy-Item -Path $paiExePath -Destination $paiTargetPath -Force
+        Write-Success "Installed 'pai' command"
+    } elseif (Test-Path $exePath) {
+        # If only persistenceai.exe exists, create pai.exe as a copy
+        $paiTargetPath = Join-Path $INSTALL_DIR "pai.exe"
+        Copy-Item -Path $exePath -Destination $paiTargetPath -Force
+        Write-Success "Installed 'pai' command (created from persistenceai.exe)"
+    }
+    
+    Write-Success "Extraction completed - both 'pai' and 'persistenceai' commands available"
 } catch {
     Write-Error "Extraction failed: $_"
     Remove-Item -Path $TEMP_DIR -Recurse -Force -ErrorAction SilentlyContinue
