@@ -67,44 +67,26 @@ if ($args.Count -gt 0) {
     Write-Info "Installing version: $Version"
 }
 
-# Build download URL - query GitHub Releases for actual asset filename
-Write-Info "Finding download URL from GitHub Releases..."
-try {
-    if ($Version -eq "latest") {
-        $releaseUrl = "https://api.github.com/repos/Persistence-AI/Landing/releases/latest"
-    } else {
-        $releaseUrl = "https://api.github.com/repos/Persistence-AI/Landing/releases/tags/v$Version"
+# Build download URL - use serverless function to proxy private GitHub Releases
+Write-Info "Getting download URL from serverless API..."
+$downloadApiUrl = "https://serverless-woad-one.vercel.app/api/download"
+$downloadUrl = "$downloadApiUrl?version=$Version&platform=windows&arch=x64"
+
+# If version is "latest", we'll let the API determine it
+if ($Version -eq "latest") {
+    Write-Info "Fetching latest version from API..."
+    try {
+        $latestResponse = Invoke-RestMethod -Uri "$BASE_URL/api/latest.json" -ErrorAction SilentlyContinue
+        if ($latestResponse.version) {
+            $Version = $latestResponse.version
+            $downloadUrl = "$downloadApiUrl?version=$Version&platform=windows&arch=x64"
+        }
+    } catch {
+        # Keep "latest" and let API handle it
     }
-    
-    $release = Invoke-RestMethod -Uri $releaseUrl -ErrorAction Stop
-    
-    # Update version from release tag
-    $Version = $release.tag_name -replace '^v', ''
-    Write-Info "Found release version: $Version"
-    
-    # Find the Windows x64 zip asset
-    $windowsAsset = $release.assets | Where-Object { 
-        $_.name -like "*windows*x64*.zip" -or 
-        $_.name -like "*win*x64*.zip" -or
-        $_.name -like "*windows*.zip"
-    } | Select-Object -First 1
-    
-    if (-not $windowsAsset) {
-        # Try to find any zip file as fallback
-        $windowsAsset = $release.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
-    }
-    
-    if ($windowsAsset) {
-        $downloadUrl = $windowsAsset.browser_download_url
-        Write-Info "Found asset: $($windowsAsset.name)"
-    } else {
-        throw "No Windows x64 zip file found in release assets"
-    }
-} catch {
-    Write-Error "Failed to find release: $_"
-    Write-Error "Please check: https://github.com/Persistence-AI/Landing/releases"
-    exit 1
 }
+
+Write-Info "Download URL: $downloadUrl"
 
 # Check if already installed
 $existingPath = Get-Command -Name $APP_NAME -ErrorAction SilentlyContinue
