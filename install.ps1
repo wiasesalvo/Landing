@@ -5,16 +5,16 @@
 
 $ErrorActionPreference = "Stop"
 
-# Colors for output
-function Write-Info { param([string]$msg) Write-Host "ℹ️  $msg" -ForegroundColor Cyan }
-function Write-Success { param([string]$msg) Write-Host "✅ $msg" -ForegroundColor Green }
-function Write-Error { param([string]$msg) Write-Host "❌ $msg" -ForegroundColor Red }
-function Write-Warning { param([string]$msg) Write-Host "⚠️  $msg" -ForegroundColor Yellow }
+# Colors for output - Modern, clean formatting
+function Write-Info { param([string]$msg) Write-Host "  " -NoNewline; Write-Host "i" -ForegroundColor Cyan -NoNewline; Write-Host " $msg" -ForegroundColor Gray }
+function Write-Success { param([string]$msg) Write-Host "  " -NoNewline; Write-Host "+" -ForegroundColor Green -NoNewline; Write-Host " $msg" -ForegroundColor Gray }
+function Write-Error { param([string]$msg) Write-Host "  " -NoNewline; Write-Host "x" -ForegroundColor Red -NoNewline; Write-Host " $msg" -ForegroundColor Gray }
+function Write-Warning { param([string]$msg) Write-Host "  " -NoNewline; Write-Host "!" -ForegroundColor Yellow -NoNewline; Write-Host " $msg" -ForegroundColor Gray }
+function Write-Step { param([string]$msg) Write-Host "  " -NoNewline; Write-Host ">" -ForegroundColor Cyan -NoNewline; Write-Host " $msg" -ForegroundColor White }
 
 Write-Host ""
-Write-Host "╔════════════════════════════════════════╗" -ForegroundColor Magenta
-Write-Host "║     PersistenceAI Installer           ║" -ForegroundColor Magenta
-Write-Host "╚════════════════════════════════════════╝" -ForegroundColor Magenta
+Write-Host "  " -NoNewline; Write-Host "PersistenceAI" -ForegroundColor Magenta -NoNewline; Write-Host " Installer" -ForegroundColor White
+Write-Host "  " -NoNewline; Write-Host "================================" -ForegroundColor DarkGray
 Write-Host ""
 
 # Configuration
@@ -41,7 +41,7 @@ if ($args.Count -gt 0) {
     $Version = $args[0]
     Write-Info "Installing version: $Version"
 } else {
-    Write-Info "Fetching latest version..."
+    Write-Step "Fetching latest version..."
     try {
         # Try to get latest version from API
         $latestResponse = Invoke-RestMethod -Uri "$BASE_URL/api/latest.json" -ErrorAction SilentlyContinue
@@ -68,7 +68,7 @@ if ($args.Count -gt 0) {
 }
 
 # Build download URL - direct from GitHub Releases (like OpenCode)
-Write-Info "Getting download URL from GitHub Releases..."
+Write-Step "Getting download URL from GitHub Releases..."
 
 # If version is "latest", fetch the actual version first
 if ($Version -eq "latest") {
@@ -94,7 +94,7 @@ if ($Version -eq "latest") {
 
 # Build direct GitHub Releases URL (like OpenCode)
 # Query GitHub API to find the actual asset filename
-Write-Info "Finding Windows x64 asset in release v$Version..."
+Write-Step "Finding Windows x64 asset in release v$Version..."
 try {
     if ($Version -eq "latest") {
         $releaseUrl = "https://api.github.com/repos/Persistence-AI/Landing/releases/latest"
@@ -169,17 +169,17 @@ if ($existingPath) {
 }
 
 # Create directories
-Write-Info "Creating installation directory: $INSTALL_DIR"
+Write-Step "Preparing installation directories..."
 New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null
 
-Write-Info "Creating temporary directory: $TEMP_DIR"
 if (Test-Path $TEMP_DIR) {
     Remove-Item $TEMP_DIR -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path $TEMP_DIR | Out-Null
 
 # Download
-Write-Info "Downloading PersistenceAI from: $downloadUrl"
+Write-Step "Downloading PersistenceAI..."
+Write-Info "Source: $downloadUrl"
 $zipPath = Join-Path $TEMP_DIR $zipName
 try {
     $ProgressPreference = 'SilentlyContinue'
@@ -205,7 +205,7 @@ if (-not (Test-Path $zipPath)) {
 }
 
 # Extract
-Write-Info "Extracting archive..."
+Write-Step "Extracting archive..."
 try {
     Expand-Archive -Path $zipPath -DestinationPath $TEMP_DIR -Force
     
@@ -257,8 +257,8 @@ try {
         try {
             $installedVersion = & $targetPath --version 2>&1 | Select-Object -First 1
             if ($installedVersion -match "0\.0\.0-local") {
-                Write-Warning "⚠️  Installed binary appears to be DEV version (0.0.0-local-*)"
-                Write-Warning "   This should not happen with production ZIP. Please report this issue."
+                Write-Warning "Installed binary appears to be DEV version (0.0.0-local-*)"
+                Write-Warning "This should not happen with production ZIP. Please report this issue."
             } elseif ($installedVersion -match "1\.\d+\.\d+") {
                 Write-Success "Verified installed binary is production version: $installedVersion"
             }
@@ -280,33 +280,37 @@ Remove-Item -Path $TEMP_DIR -Recurse -Force -ErrorAction SilentlyContinue
 # Add to PATH
 $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($currentPath -notlike "*$INSTALL_DIR*") {
-    Write-Info "Adding PersistenceAI to PATH..."
+    Write-Step "Adding PersistenceAI to PATH..."
     $newPath = "$currentPath;$INSTALL_DIR"
     [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
     
     # Also add to current session
     $env:Path += ";$INSTALL_DIR"
-    Write-Success "Added to PATH"
+    Write-Success "PATH updated successfully"
 } else {
-    Write-Info "PersistenceAI is already in PATH"
+    Write-Info "Already in PATH"
 }
 
 # Verify installation
-Write-Info "Verifying installation..."
+Write-Step "Verifying installation..."
 $exeFullPath = Join-Path $INSTALL_DIR "$APP_NAME.exe"
 if (Test-Path $exeFullPath) {
     try {
         $versionOutput = & $exeFullPath --version 2>&1 | Select-Object -First 1
         Write-Host ""
-        Write-Success "Installation successful!"
+        Write-Host "  " -NoNewline; Write-Host "================================" -ForegroundColor DarkGray
+        Write-Host "  " -NoNewline; Write-Host "Installation Complete!" -ForegroundColor Green
+        Write-Host "  " -NoNewline; Write-Host "================================" -ForegroundColor DarkGray
         Write-Host ""
-        Write-Info "PersistenceAI version: $versionOutput"
-        Write-Info "Installation location: $INSTALL_DIR"
+        Write-Host "  " -NoNewline; Write-Host "Version:" -ForegroundColor Cyan -NoNewline; Write-Host " $versionOutput" -ForegroundColor White
+        Write-Host "  " -NoNewline; Write-Host "Location:" -ForegroundColor Cyan -NoNewline; Write-Host " $INSTALL_DIR" -ForegroundColor Gray
         Write-Host ""
-        Write-Warning "Note: You may need to restart PowerShell for the PATH changes to take effect."
+        Write-Host "  " -NoNewline; Write-Host "Quick Start:" -ForegroundColor Magenta
+        Write-Host "  " -NoNewline; Write-Host "  $APP_NAME" -ForegroundColor White -NoNewline; Write-Host " - Run PersistenceAI" -ForegroundColor Gray
+        Write-Host "  " -NoNewline; Write-Host "  $APP_NAME --help" -ForegroundColor White -NoNewline; Write-Host " - Show help" -ForegroundColor Gray
         Write-Host ""
-        Write-Info "To use PersistenceAI, open a new PowerShell window and run: $APP_NAME"
-        Write-Info "For more information, visit: $BASE_URL/docs"
+        Write-Host "  " -NoNewline; Write-Host "Note:" -ForegroundColor Yellow -NoNewline; Write-Host " Restart PowerShell for PATH changes to take effect" -ForegroundColor Gray
+        Write-Host "  " -NoNewline; Write-Host "Docs:" -ForegroundColor Cyan -NoNewline; Write-Host " $BASE_URL/docs" -ForegroundColor Gray
         Write-Host ""
     } catch {
         Write-Warning "Installation completed, but version check failed. You may need to restart PowerShell."
