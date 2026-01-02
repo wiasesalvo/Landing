@@ -433,46 +433,72 @@ try {
 # Cleanup
 Remove-Item -Path $TEMP_DIR -Recurse -Force -ErrorAction SilentlyContinue
 
-# Add to PATH
+# Add to PATH (prepend to ensure our executables are found first)
 $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($currentPath -notlike "*$INSTALL_DIR*") {
     Write-Step "Adding PersistenceAI to PATH..."
-    $newPath = "$currentPath;$INSTALL_DIR"
+    # Prepend to PATH to ensure our executables take precedence over npm/other tools
+    $newPath = "$INSTALL_DIR;$currentPath"
     [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
     
-    # Also add to current session
-    $env:Path += ";$INSTALL_DIR"
-    Write-Success "PATH updated successfully"
+    # Also add to current session (prepend)
+    $env:Path = "$INSTALL_DIR;$env:Path"
+    Write-Success "PATH updated successfully (prepended for priority)"
 } else {
     Write-Info "Already in PATH"
+    # Ensure it's at the beginning even if already there
+    $pathParts = $currentPath -split ';'
+    if ($pathParts[0] -ne $INSTALL_DIR) {
+        $pathParts = $pathParts | Where-Object { $_ -ne $INSTALL_DIR }
+        $newPath = "$INSTALL_DIR;" + ($pathParts -join ';')
+        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+        $env:Path = "$INSTALL_DIR;$env:Path"
+        Write-Info "Moved PersistenceAI to beginning of PATH for priority"
+    }
 }
 
 # Verify installation
 Write-Step "Verifying installation..."
 $exeFullPath = Join-Path $INSTALL_DIR "$APP_NAME.exe"
-if (Test-Path $exeFullPath) {
-    try {
-        $versionOutput = & $exeFullPath --version 2>&1 | Select-Object -First 1
-        Write-Host ""
-        Write-Host "  " -NoNewline; Write-Host "================================" -ForegroundColor DarkGray
-        Write-Host "  " -NoNewline; Write-Host "Installation Complete!" -ForegroundColor Green
-        Write-Host "  " -NoNewline; Write-Host "================================" -ForegroundColor DarkGray
-        Write-Host ""
-        Write-Host "  " -NoNewline; Write-Host "Version:" -ForegroundColor Cyan -NoNewline; Write-Host " $versionOutput" -ForegroundColor White
-        Write-Host "  " -NoNewline; Write-Host "Location:" -ForegroundColor Cyan -NoNewline; Write-Host " $INSTALL_DIR" -ForegroundColor Gray
-        Write-Host ""
-        Write-Host "  " -NoNewline; Write-Host "Quick Start:" -ForegroundColor Magenta
-        Write-Host "  " -NoNewline; Write-Host "  $APP_NAME" -ForegroundColor White -NoNewline; Write-Host " - Run PersistenceAI" -ForegroundColor Gray
-        Write-Host "  " -NoNewline; Write-Host "  $APP_NAME --help" -ForegroundColor White -NoNewline; Write-Host " - Show help" -ForegroundColor Gray
-        Write-Host ""
-        Write-Host "  " -NoNewline; Write-Host "Note:" -ForegroundColor Yellow -NoNewline; Write-Host " Restart PowerShell for PATH changes to take effect" -ForegroundColor Gray
-        Write-Host "  " -NoNewline; Write-Host "Docs:" -ForegroundColor Cyan -NoNewline; Write-Host " $BASE_URL/docs" -ForegroundColor Gray
-        Write-Host ""
-    } catch {
-        Write-Warning "Installation completed, but version check failed. You may need to restart PowerShell."
-        Write-Info "Try running: $exeFullPath --version"
-    }
-} else {
-    Write-Error "Installation verification failed: executable not found"
+$paiExeFullPath = Join-Path $INSTALL_DIR "pai.exe"
+
+# Verify both executables exist
+if (-not (Test-Path $exeFullPath)) {
+    Write-Error "Installation verification failed: persistenceai.exe not found"
     exit 1
+}
+
+if (-not (Test-Path $paiExeFullPath)) {
+    Write-Error "Installation verification failed: pai.exe not found"
+    exit 1
+}
+
+try {
+    $versionOutput = & $exeFullPath --version 2>&1 | Select-Object -First 1
+    
+    # Verify both commands work
+    $paiVersionOutput = & $paiExeFullPath --version 2>&1 | Select-Object -First 1
+    
+    Write-Host ""
+    Write-Host "  " -NoNewline; Write-Host "================================" -ForegroundColor DarkGray
+    Write-Host "  " -NoNewline; Write-Host "Installation Complete!" -ForegroundColor Green
+    Write-Host "  " -NoNewline; Write-Host "================================" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  " -NoNewline; Write-Host "Version:" -ForegroundColor Cyan -NoNewline; Write-Host " $versionOutput" -ForegroundColor White
+    Write-Host "  " -NoNewline; Write-Host "Location:" -ForegroundColor Cyan -NoNewline; Write-Host " $INSTALL_DIR" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  " -NoNewline; Write-Host "Installed Commands:" -ForegroundColor Magenta
+    Write-Host "  " -NoNewline; Write-Host "  persistenceai" -ForegroundColor White -NoNewline; Write-Host " - Run PersistenceAI" -ForegroundColor Gray
+    Write-Host "  " -NoNewline; Write-Host "  pai" -ForegroundColor White -NoNewline; Write-Host " - Run PersistenceAI (short alias)" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  " -NoNewline; Write-Host "Quick Start:" -ForegroundColor Magenta
+    Write-Host "  " -NoNewline; Write-Host "  $APP_NAME" -ForegroundColor White -NoNewline; Write-Host " or " -ForegroundColor Gray -NoNewline; Write-Host "pai" -ForegroundColor White -NoNewline; Write-Host " - Launch PersistenceAI" -ForegroundColor Gray
+    Write-Host "  " -NoNewline; Write-Host "  $APP_NAME --help" -ForegroundColor White -NoNewline; Write-Host " or " -ForegroundColor Gray -NoNewline; Write-Host "pai --help" -ForegroundColor White -NoNewline; Write-Host " - Show help" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  " -NoNewline; Write-Host "Note:" -ForegroundColor Yellow -NoNewline; Write-Host " Restart PowerShell for PATH changes to take effect" -ForegroundColor Gray
+    Write-Host "  " -NoNewline; Write-Host "Docs:" -ForegroundColor Cyan -NoNewline; Write-Host " $BASE_URL/docs" -ForegroundColor Gray
+    Write-Host ""
+} catch {
+    Write-Warning "Installation completed, but version check failed. You may need to restart PowerShell."
+    Write-Info "Try running: $exeFullPath --version or $paiExeFullPath --version"
 }
