@@ -274,39 +274,90 @@ if (Test-Path $TEMP_DIR) {
 }
 New-Item -ItemType Directory -Force -Path $TEMP_DIR | Out-Null
 
-# Download with progress bar
+# Download with progress indication
 Write-Step "Downloading PersistenceAI..."
 Write-Info "Source: $downloadUrl"
 $zipPath = Join-Path $TEMP_DIR $zipName
 try {
-    # Use Write-Progress for native PowerShell progress bar
-    $ProgressPreference = 'Continue'
+    # Suppress verbose progress to avoid byte-by-byte output loop
+    $ProgressPreference = 'SilentlyContinue'
     
-    # Show animated status
+    # Show animated status with timeout protection
     Write-Host "  " -NoNewline; Write-Host "Downloading" -NoNewline -ForegroundColor White
     $downloadJob = Start-Job -ScriptBlock {
         param($url, $outFile)
+        # Suppress progress in background job
+        $ProgressPreference = 'SilentlyContinue'
         try {
-            Invoke-WebRequest -Uri $url -OutFile $outFile -ErrorAction Stop
-            return $true
+            # Add timeout to prevent infinite hanging
+            $webClient = New-Object System.Net.WebClient
+            $webClient.DownloadFile($url, $outFile)
+            $webClient.Dispose()
+            return @{Success=$true; Error=$null}
         } catch {
-            return $false
+            return @{Success=$false; Error=$_.Exception.Message}
         }
     } -ArgumentList $downloadUrl, $zipPath
     
     $dots = 0
+    $timeoutSeconds = 600  # 10 minute timeout
+    $startTime = Get-Date
+    $lastFileSize = 0
+    $stallCount = 0
+    
     while ($downloadJob.State -eq 'Running') {
+        $elapsed = (Get-Date) - $startTime
+        
+        # Timeout check
+        if ($elapsed.TotalSeconds -gt $timeoutSeconds) {
+            Stop-Job $downloadJob -ErrorAction SilentlyContinue
+            Remove-Job $downloadJob -Force -ErrorAction SilentlyContinue
+            throw "Download timeout after $timeoutSeconds seconds - file may be too large or connection too slow"
+        }
+        
+        # Check if download is making progress (detect stalls)
+        if (Test-Path $zipPath) {
+            $currentFileSize = (Get-Item $zipPath -ErrorAction SilentlyContinue).Length
+            if ($currentFileSize -eq $lastFileSize -and $currentFileSize -gt 0) {
+                $stallCount++
+                # If file size hasn't changed for 2 minutes, likely stalled
+                if ($stallCount -gt 40) {  # 40 * 3 seconds = 2 minutes
+                    Stop-Job $downloadJob -ErrorAction SilentlyContinue
+                    Remove-Job $downloadJob -Force -ErrorAction SilentlyContinue
+                    throw "Download appears stalled - file size hasn't increased in 2 minutes"
+                }
+            } else {
+                $stallCount = 0
+                $lastFileSize = $currentFileSize
+            }
+        }
+        
         $dots = ($dots + 1) % 4
         $dotStr = "." * $dots + " " * (3 - $dots)
-        Write-Host "`r  Downloading$dotStr" -NoNewline -ForegroundColor White
+        $sizeInfo = if (Test-Path $zipPath) { " ($([math]::Round((Get-Item $zipPath -ErrorAction SilentlyContinue).Length/1MB, 1)) MB)" } else { "" }
+        Write-Host "`r  Downloading$dotStr$sizeInfo" -NoNewline -ForegroundColor White
         Start-Sleep -Milliseconds 300
     }
     
-    $downloadResult = Receive-Job $downloadJob
+    # Wait a moment for job to finish completely
+    Start-Sleep -Milliseconds 500
+    
+    $downloadResult = Receive-Job $downloadJob -ErrorAction SilentlyContinue
     Remove-Job $downloadJob -Force -ErrorAction SilentlyContinue
     
-    if (-not $downloadResult) {
-        throw "Download failed"
+    if (-not $downloadResult -or -not $downloadResult.Success) {
+        $errorMsg = if ($downloadResult -and $downloadResult.Error) { $downloadResult.Error } else { "Unknown error" }
+        throw "Download failed: $errorMsg"
+    }
+    
+    # Verify file was actually downloaded
+    if (-not (Test-Path $zipPath)) {
+        throw "Downloaded file not found at expected location"
+    }
+    
+    $finalSize = (Get-Item $zipPath).Length
+    if ($finalSize -eq 0) {
+        throw "Downloaded file is empty (0 bytes)"
     }
     
     Write-Host "`r  Downloading... done" -ForegroundColor White
@@ -562,6 +613,9 @@ try {
     Write-Host "  " -NoNewline; Write-Host "================================" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  " -NoNewline; Write-Host "Version:" -ForegroundColor Cyan -NoNewline; Write-Host " $versionOutput" -ForegroundColor White
+    if ($paiVersionOutput -and $paiVersionOutput -ne $versionOutput) {
+        Write-Host "  " -NoNewline; Write-Host "pai version:" -ForegroundColor Cyan -NoNewline; Write-Host " $paiVersionOutput" -ForegroundColor White
+    }
     Write-Host "  " -NoNewline; Write-Host "Location:" -ForegroundColor Cyan -NoNewline; Write-Host " $INSTALL_DIR" -ForegroundColor Gray
     Write-Host ""
     Write-Host "  " -NoNewline; Write-Host "Installed Commands:" -ForegroundColor Magenta
