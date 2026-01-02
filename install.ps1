@@ -450,22 +450,28 @@ try {
             foreach ($proc in $processes) {
                 try {
                     Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-                    Start-Sleep -Milliseconds 200
                 } catch {
                     # Ignore errors - process might have already stopped
                 }
             }
+            # Wait longer for processes to fully release file handles (Windows needs time)
+            Write-Info "Waiting for processes to release file handles..."
+            Start-Sleep -Seconds 3  # Increased from 200ms to 3 seconds
         }
         
         # Remove all files in install directory (not just .exe)
         $allFiles = Get-ChildItem -Path $INSTALL_DIR -File -ErrorAction SilentlyContinue
         foreach ($file in $allFiles) {
             try {
-                # Retry logic for locked files
-                $retries = 3
-                $retryDelay = 500
+                # Retry logic for locked files with longer waits
+                $retries = 5
+                $retryDelay = 1000
                 for ($i = 0; $i -lt $retries; $i++) {
                     try {
+                        # Try to unlock file first by removing read-only attribute
+                        if (Test-Path $file.FullName) {
+                            $file.Attributes = 'Normal'
+                        }
                         Remove-Item -Path $file.FullName -Force -ErrorAction Stop
                         break
                     } catch {
@@ -478,40 +484,108 @@ try {
                     }
                 }
             } catch {
-                Write-Warning "Could not remove $($file.Name), will overwrite"
+                Write-Warning "Could not remove $($file.Name), will attempt overwrite"
             }
         }
+        
+        # Additional wait to ensure file handles are released
+        Start-Sleep -Milliseconds 500
         
         Write-Success "Existing installation removed"
     }
     
     if (Test-Path $exePath) {
         $targetPath = Join-Path $INSTALL_DIR "$APP_NAME.exe"
-        # Get file info before copy to verify replacement
         $sourceFileInfo = Get-Item $exePath
+        $sourceHash = (Get-FileHash -Path $exePath -Algorithm SHA256).Hash
+        
+        # Get old file hash if it exists
+        $oldHash = $null
+        if (Test-Path $targetPath) {
+            $oldHash = (Get-FileHash -Path $targetPath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
+        }
+        
+        # Remove target FIRST to ensure clean replacement
+        if (Test-Path $targetPath) {
+            try {
+                Remove-Item -Path $targetPath -Force -ErrorAction Stop
+                Start-Sleep -Milliseconds 300  # Wait after removal
+            } catch {
+                Write-Warning "Could not remove existing $APP_NAME.exe - file may be locked"
+            }
+        }
+        
+        # Copy new file
         Copy-Item -Path $exePath -Destination $targetPath -Force
-        # Verify the file was actually copied (check size)
+        
+        # Verify the file was actually replaced (check hash)
         $targetFileInfo = Get-Item $targetPath
-        if ($targetFileInfo.Length -eq $sourceFileInfo.Length) {
-            Write-Success "Installed 'persistenceai' command ($([math]::Round($targetFileInfo.Length/1MB, 2)) MB)"
+        $targetHash = (Get-FileHash -Path $targetPath -Algorithm SHA256).Hash
+        
+        if ($targetFileInfo.Length -eq $sourceFileInfo.Length -and $targetHash -eq $sourceHash) {
+            if ($oldHash -and $targetHash -eq $oldHash) {
+                Write-Warning "WARNING: File hash matches old version - binary was NOT updated!"
+                Write-Info "This usually means the file is locked. Try closing all terminals and reinstalling."
+            } else {
+                Write-Success "Installed 'persistenceai' command ($([math]::Round($targetFileInfo.Length/1MB, 2)) MB)"
+            }
         } else {
-            Write-Warning "File size mismatch - may not have copied correctly"
+            Write-Warning "File verification failed - size or hash mismatch"
         }
     }
     
     if (Test-Path $paiExePath) {
         $paiTargetPath = Join-Path $INSTALL_DIR "pai.exe"
         $sourcePaiInfo = Get-Item $paiExePath
+        $sourcePaiHash = (Get-FileHash -Path $paiExePath -Algorithm SHA256).Hash
+        
+        # Get old file hash if it exists
+        $oldPaiHash = $null
+        if (Test-Path $paiTargetPath) {
+            $oldPaiHash = (Get-FileHash -Path $paiTargetPath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
+        }
+        
+        # Remove target FIRST to ensure clean replacement
+        if (Test-Path $paiTargetPath) {
+            try {
+                Remove-Item -Path $paiTargetPath -Force -ErrorAction Stop
+                Start-Sleep -Milliseconds 300  # Wait after removal
+            } catch {
+                Write-Warning "Could not remove existing pai.exe - file may be locked"
+            }
+        }
+        
+        # Copy new file
         Copy-Item -Path $paiExePath -Destination $paiTargetPath -Force
+        
+        # Verify the file was actually replaced (check hash)
         $targetPaiInfo = Get-Item $paiTargetPath
-        if ($targetPaiInfo.Length -eq $sourcePaiInfo.Length) {
-            Write-Success "Installed 'pai' command ($([math]::Round($targetPaiInfo.Length/1MB, 2)) MB)"
+        $targetPaiHash = (Get-FileHash -Path $paiTargetPath -Algorithm SHA256).Hash
+        
+        if ($targetPaiInfo.Length -eq $sourcePaiInfo.Length -and $targetPaiHash -eq $sourcePaiHash) {
+            if ($oldPaiHash -and $targetPaiHash -eq $oldPaiHash) {
+                Write-Warning "WARNING: pai.exe hash matches old version - binary was NOT updated!"
+                Write-Info "This usually means the file is locked. Try closing all terminals and reinstalling."
+            } else {
+                Write-Success "Installed 'pai' command ($([math]::Round($targetPaiInfo.Length/1MB, 2)) MB)"
+            }
         } else {
-            Write-Warning "File size mismatch for pai.exe"
+            Write-Warning "File verification failed for pai.exe - size or hash mismatch"
         }
     } elseif (Test-Path $exePath) {
         # If only persistenceai.exe exists, create pai.exe as a copy
         $paiTargetPath = Join-Path $INSTALL_DIR "pai.exe"
+        
+        # Remove target FIRST if it exists
+        if (Test-Path $paiTargetPath) {
+            try {
+                Remove-Item -Path $paiTargetPath -Force -ErrorAction Stop
+                Start-Sleep -Milliseconds 300
+            } catch {
+                Write-Warning "Could not remove existing pai.exe - file may be locked"
+            }
+        }
+        
         Copy-Item -Path $exePath -Destination $paiTargetPath -Force
         Write-Success "Installed 'pai' command (created from persistenceai.exe)"
     }
@@ -602,7 +676,27 @@ if (-not (Test-Path $paiExeFullPath)) {
 }
 
 try {
+    # Check if there are other pai installations in PATH that might take precedence
+    $allPaiCommands = Get-Command -Name "pai" -All -ErrorAction SilentlyContinue
+    $ourPaiPath = $paiExeFullPath
+    $otherPaiPaths = $allPaiCommands | Where-Object { $_.Source -ne $ourPaiPath }
+    
+    if ($otherPaiPaths) {
+        Write-Warning "Found other 'pai' installations in PATH that may take precedence:"
+        foreach ($other in $otherPaiPaths) {
+            Write-Info "  - $($other.Source)"
+        }
+        Write-Info "Our installation is at: $ourPaiPath"
+        Write-Info "Make sure our PATH entry comes first (it should after restarting PowerShell)"
+    }
+    
     $versionOutput = & $exeFullPath --version 2>&1 | Select-Object -First 1
+    
+    # Verify version matches what we downloaded
+    if ($Version -and $versionOutput -notlike "*$Version*") {
+        Write-Warning "Installed version ($versionOutput) does not match expected version ($Version)"
+        Write-Info "The binary may not have been updated correctly"
+    }
     
     # Verify both commands work
     $paiVersionOutput = & $paiExeFullPath --version 2>&1 | Select-Object -First 1
