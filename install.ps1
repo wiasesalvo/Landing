@@ -95,8 +95,6 @@ Write-Host ""
 # Configuration
 $BASE_URL = "https://persistence-ai.github.io/Landing"
 $APP_NAME = "persistenceai"
-
-# Default install directory (can be overridden by env var or command-line argument)
 $INSTALL_DIR = "$env:USERPROFILE\.persistenceai\bin"
 $TEMP_DIR = "$env:TEMP\persistenceai-install"
 
@@ -112,44 +110,10 @@ if ($arch -ne "x64") {
 $platform = "$os-$arch"
 $zipName = "$APP_NAME-$platform.zip"
 
-# Determine version and install directory
+# Determine version
 $Version = $null
-$customInstallDir = $null
-
-# Parse arguments: [version] [--install-dir <path>]
-for ($i = 0; $i -lt $args.Count; $i++) {
-    if ($args[$i] -eq "--install-dir" -or $args[$i] -eq "-d") {
-        if ($i + 1 -lt $args.Count) {
-            $customInstallDir = $args[$i + 1]
-            $i++ # Skip next argument as it's the path
-        }
-    } elseif (-not $Version -and $args[$i] -notlike "-*") {
-        $Version = $args[$i]
-    }
-}
-
-# Set install directory (priority: command-line arg > env var > default)
-# This allows installation to any directory the user wants
-if ($customInstallDir) {
-    $INSTALL_DIR = $customInstallDir
-    Write-Info "Using install directory from argument: $INSTALL_DIR"
-} elseif ($env:PERSISTENCEAI_INSTALL_DIR) {
-    $INSTALL_DIR = $env:PERSISTENCEAI_INSTALL_DIR
-    Write-Info "Using install directory from environment: $INSTALL_DIR"
-}
-
-# Ensure install directory is absolute path
-if (-not [System.IO.Path]::IsPathRooted($INSTALL_DIR)) {
-    $resolved = Resolve-Path $INSTALL_DIR -ErrorAction SilentlyContinue
-    if ($resolved) {
-        $INSTALL_DIR = $resolved.Path
-    } else {
-        # If relative path, make it relative to current directory
-        $INSTALL_DIR = (Resolve-Path (Join-Path (Get-Location) $INSTALL_DIR)).Path
-    }
-}
-
-if ($Version) {
+if ($args.Count -gt 0) {
+    $Version = $args[0]
     Write-Info "Installing version: $Version"
 } else {
     Write-Step "Fetching latest version"
@@ -269,20 +233,10 @@ try {
 
 Write-Info "Download URL: $downloadUrl"
 
-# Check if already installed (detect from any location)
+# Check if already installed
 $existingPath = Get-Command -Name $APP_NAME -ErrorAction SilentlyContinue
 if ($existingPath) {
-    $existingInstallDir = Split-Path $existingPath.Source -Parent
     Write-Info "PersistenceAI is already installed at: $($existingPath.Source)"
-    
-    # If no custom install directory specified, use existing installation location
-    if (-not $customInstallDir -and -not $env:PERSISTENCEAI_INSTALL_DIR) {
-        $INSTALL_DIR = $existingInstallDir
-        Write-Info "Using existing installation directory: $INSTALL_DIR"
-    } elseif ($INSTALL_DIR -ne $existingInstallDir) {
-        Write-Info "Will install to: $INSTALL_DIR (different from existing: $existingInstallDir)"
-    }
-    
     $currentVersion = & $existingPath.Source --version 2>&1 | Select-Object -First 1
     Write-Info "Current version: $currentVersion"
     
@@ -545,46 +499,86 @@ try {
         $sourceFileInfo = Get-Item $exePath
         $sourceHash = (Get-FileHash -Path $exePath -Algorithm SHA256).Hash
         
-        # Check version of downloaded file BEFORE installing
-        Write-Step "Checking version of downloaded binary..."
-        try {
-            $downloadedVersion = & $exePath --version 2>&1 | Select-Object -First 1
-            Write-Info "Downloaded binary version: $downloadedVersion"
-        } catch {
-            Write-Warning "Could not check downloaded binary version: $_"
-        }
-        
-        # Get old file info if it exists
+        # Get old file hash if it exists
         $oldHash = $null
-        $oldVersion = $null
-        $oldModTime = $null
         if (Test-Path $targetPath) {
-            $oldFileInfo = Get-Item $targetPath
             $oldHash = (Get-FileHash -Path $targetPath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
-            $oldModTime = $oldFileInfo.LastWriteTime
-            try {
-                $oldVersion = & $targetPath --version 2>&1 | Select-Object -First 1
-                Write-Info "Existing binary version: $oldVersion (modified: $oldModTime)"
-            } catch {
-                Write-Warning "Could not check existing binary version"
-            }
         }
         
-        # Remove target FIRST to ensure clean replacement
+        # Remove target FIRST to ensure clean replacement (aggressive removal for locked files)
         if (Test-Path $targetPath) {
-            try {
-                Remove-Item -Path $targetPath -Force -ErrorAction Stop
-                Start-Sleep -Milliseconds 300  # Wait after removal
-            } catch {
-                Write-Warning "Could not remove existing $APP_NAME.exe - file may be locked"
+            Write-Info "Removing existing $APP_NAME.exe..."
+            $removed = $false
+            $retries = 10
+            $retryDelay = 500
+            
+            for ($i = 0; $i -lt $retries; $i++) {
+                try {
+                    # Try to remove read-only attribute first
+                    $targetFile = Get-Item $targetPath -Force -ErrorAction SilentlyContinue
+                    if ($targetFile) {
+                        $targetFile.Attributes = 'Normal'
+                    }
+                    
+                    # Try to remove the file
+                    Remove-Item -Path $targetPath -Force -ErrorAction Stop
+                    
+                    # Verify it's actually gone
+                    Start-Sleep -Milliseconds 200
+                    if (-not (Test-Path $targetPath)) {
+                        $removed = $true
+                        Write-Info "Successfully removed existing $APP_NAME.exe"
+                        break
+                    }
+                } catch {
+                    if ($i -lt $retries - 1) {
+                        Write-Info "Attempt $($i + 1)/$retries failed, retrying in $($retryDelay)ms..."
+                        Start-Sleep -Milliseconds $retryDelay
+                        $retryDelay *= 1.5
+                    } else {
+                        Write-Warning "Could not remove existing $APP_NAME.exe after $retries attempts"
+                        Write-Warning "File may be locked by another process. Trying rename approach..."
+                        
+                        # Last resort: try to rename the old file
+                        try {
+                            $backupPath = "$targetPath.old.$(Get-Date -Format 'yyyyMMddHHmmss')"
+                            Rename-Item -Path $targetPath -NewName (Split-Path $backupPath -Leaf) -Force -ErrorAction Stop
+                            Write-Info "Renamed old file to backup: $backupPath"
+                            $removed = $true
+                        } catch {
+                            Write-Warning "Could not rename file either. Copy may fail if file is locked."
+                        }
+                    }
+                }
             }
+            
+            if (-not $removed) {
+                Write-Warning "WARNING: Old file may still exist. Installation may fail or not update correctly."
+            }
+            
+            # Additional wait to ensure file handles are fully released
+            Start-Sleep -Milliseconds 500
         }
         
-        # Copy new file
-        Copy-Item -Path $exePath -Destination $targetPath -Force
+        # Copy new file (use Move-Item if target still exists and is locked, as a workaround)
+        if (Test-Path $targetPath) {
+            Write-Warning "Target file still exists, attempting to overwrite with Move-Item..."
+            try {
+                # Move new file to temp name first, then rename
+                $tempTarget = "$targetPath.new"
+                Copy-Item -Path $exePath -Destination $tempTarget -Force
+                Start-Sleep -Milliseconds 200
+                Move-Item -Path $tempTarget -Destination $targetPath -Force
+            } catch {
+                Write-Warning "Move-Item approach failed, trying direct Copy-Item..."
+                Copy-Item -Path $exePath -Destination $targetPath -Force
+            }
+        } else {
+            Copy-Item -Path $exePath -Destination $targetPath -Force
+        }
         
         # Verify the file was actually replaced (check hash and modification time)
-        Start-Sleep -Milliseconds 200  # Ensure file system has updated
+        Start-Sleep -Milliseconds 300  # Ensure file system has updated
         $targetFileInfo = Get-Item $targetPath
         $targetHash = (Get-FileHash -Path $targetPath -Algorithm SHA256).Hash
         $targetModTime = $targetFileInfo.LastWriteTime
@@ -592,18 +586,17 @@ try {
         if ($targetFileInfo.Length -eq $sourceFileInfo.Length -and $targetHash -eq $sourceHash) {
             if ($oldHash -and $targetHash -eq $oldHash) {
                 Write-Warning "WARNING: File hash matches old version - binary was NOT updated!"
-                Write-Info "Old hash: $($oldHash.Substring(0, 16))..."
-                Write-Info "New hash: $($targetHash.Substring(0, 16))..."
+                Write-Warning "File modification time: $targetModTime"
                 Write-Info "This usually means the file is locked. Try closing all terminals and reinstalling."
             } else {
                 Write-Success "Installed 'persistenceai' command ($([math]::Round($targetFileInfo.Length/1MB, 2)) MB)"
-                Write-Info "File modified: $targetModTime"
-                if ($oldModTime) {
-                    if ($targetModTime -gt $oldModTime) {
-                        Write-Info "File was updated (newer than previous: $oldModTime)"
-                    } else {
-                        Write-Warning "File modification time is not newer - may indicate caching issue"
-                    }
+                Write-Info "File updated at: $targetModTime"
+                
+                # Verify modification time is recent (within last 5 minutes)
+                $timeDiff = (Get-Date) - $targetModTime
+                if ($timeDiff.TotalMinutes -gt 5) {
+                    Write-Warning "WARNING: File modification time is $([math]::Round($timeDiff.TotalMinutes, 1)) minutes old!"
+                    Write-Warning "This indicates the file was NOT updated. The old file is still present."
                 }
             }
         } else {
@@ -623,45 +616,137 @@ try {
             $oldPaiHash = (Get-FileHash -Path $paiTargetPath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
         }
         
-        # Remove target FIRST to ensure clean replacement
+        # Remove target FIRST to ensure clean replacement (aggressive removal for locked files)
         if (Test-Path $paiTargetPath) {
-            try {
-                Remove-Item -Path $paiTargetPath -Force -ErrorAction Stop
-                Start-Sleep -Milliseconds 300  # Wait after removal
-            } catch {
-                Write-Warning "Could not remove existing pai.exe - file may be locked"
+            Write-Info "Removing existing pai.exe..."
+            $removed = $false
+            $retries = 10
+            $retryDelay = 500
+            
+            for ($i = 0; $i -lt $retries; $i++) {
+                try {
+                    # Try to remove read-only attribute first
+                    $targetFile = Get-Item $paiTargetPath -Force -ErrorAction SilentlyContinue
+                    if ($targetFile) {
+                        $targetFile.Attributes = 'Normal'
+                    }
+                    
+                    # Try to remove the file
+                    Remove-Item -Path $paiTargetPath -Force -ErrorAction Stop
+                    
+                    # Verify it's actually gone
+                    Start-Sleep -Milliseconds 200
+                    if (-not (Test-Path $paiTargetPath)) {
+                        $removed = $true
+                        Write-Info "Successfully removed existing pai.exe"
+                        break
+                    }
+                } catch {
+                    if ($i -lt $retries - 1) {
+                        Write-Info "Attempt $($i + 1)/$retries failed, retrying in $($retryDelay)ms..."
+                        Start-Sleep -Milliseconds $retryDelay
+                        $retryDelay *= 1.5
+                    } else {
+                        Write-Warning "Could not remove existing pai.exe after $retries attempts"
+                        Write-Warning "File may be locked by another process. Trying rename approach..."
+                        
+                        # Last resort: try to rename the old file
+                        try {
+                            $backupPath = "$paiTargetPath.old.$(Get-Date -Format 'yyyyMMddHHmmss')"
+                            Rename-Item -Path $paiTargetPath -NewName (Split-Path $backupPath -Leaf) -Force -ErrorAction Stop
+                            Write-Info "Renamed old file to backup: $backupPath"
+                            $removed = $true
+                        } catch {
+                            Write-Warning "Could not rename file either. Copy may fail if file is locked."
+                        }
+                    }
+                }
             }
+            
+            if (-not $removed) {
+                Write-Warning "WARNING: Old file may still exist. Installation may fail or not update correctly."
+            }
+            
+            # Additional wait to ensure file handles are fully released
+            Start-Sleep -Milliseconds 500
         }
         
-        # Copy new file
-        Copy-Item -Path $paiExePath -Destination $paiTargetPath -Force
+        # Copy new file (use Move-Item if target still exists and is locked, as a workaround)
+        if (Test-Path $paiTargetPath) {
+            Write-Warning "Target file still exists, attempting to overwrite with Move-Item..."
+            try {
+                # Move new file to temp name first, then rename
+                $tempTarget = "$paiTargetPath.new"
+                Copy-Item -Path $paiExePath -Destination $tempTarget -Force
+                Start-Sleep -Milliseconds 200
+                Move-Item -Path $tempTarget -Destination $paiTargetPath -Force
+            } catch {
+                Write-Warning "Move-Item approach failed, trying direct Copy-Item..."
+                Copy-Item -Path $paiExePath -Destination $paiTargetPath -Force
+            }
+        } else {
+            Copy-Item -Path $paiExePath -Destination $paiTargetPath -Force
+        }
         
-        # Verify the file was actually replaced (check hash)
+        # Verify the file was actually replaced (check hash and modification time)
+        Start-Sleep -Milliseconds 300  # Ensure file system has updated
         $targetPaiInfo = Get-Item $paiTargetPath
         $targetPaiHash = (Get-FileHash -Path $paiTargetPath -Algorithm SHA256).Hash
+        $targetPaiModTime = $targetPaiInfo.LastWriteTime
         
         if ($targetPaiInfo.Length -eq $sourcePaiInfo.Length -and $targetPaiHash -eq $sourcePaiHash) {
             if ($oldPaiHash -and $targetPaiHash -eq $oldPaiHash) {
                 Write-Warning "WARNING: pai.exe hash matches old version - binary was NOT updated!"
+                Write-Warning "File modification time: $targetPaiModTime"
                 Write-Info "This usually means the file is locked. Try closing all terminals and reinstalling."
             } else {
                 Write-Success "Installed 'pai' command ($([math]::Round($targetPaiInfo.Length/1MB, 2)) MB)"
+                Write-Info "File updated at: $targetPaiModTime"
+                
+                # Verify modification time is recent (within last 5 minutes)
+                $timeDiff = (Get-Date) - $targetPaiModTime
+                if ($timeDiff.TotalMinutes -gt 5) {
+                    Write-Warning "WARNING: File modification time is $([math]::Round($timeDiff.TotalMinutes, 1)) minutes old!"
+                    Write-Warning "This indicates the file was NOT updated. The old file is still present."
+                }
             }
         } else {
             Write-Warning "File verification failed for pai.exe - size or hash mismatch"
+            Write-Info "Source size: $($sourcePaiInfo.Length) bytes, Target size: $($targetPaiInfo.Length) bytes"
         }
     } elseif (Test-Path $exePath) {
         # If only persistenceai.exe exists, create pai.exe as a copy
         $paiTargetPath = Join-Path $INSTALL_DIR "pai.exe"
         
-        # Remove target FIRST if it exists
+        # Remove target FIRST if it exists (aggressive removal)
         if (Test-Path $paiTargetPath) {
-            try {
-                Remove-Item -Path $paiTargetPath -Force -ErrorAction Stop
-                Start-Sleep -Milliseconds 300
-            } catch {
-                Write-Warning "Could not remove existing pai.exe - file may be locked"
+            Write-Info "Removing existing pai.exe..."
+            $removed = $false
+            for ($i = 0; $i -lt 10; $i++) {
+                try {
+                    $targetFile = Get-Item $paiTargetPath -Force -ErrorAction SilentlyContinue
+                    if ($targetFile) { $targetFile.Attributes = 'Normal' }
+                    Remove-Item -Path $paiTargetPath -Force -ErrorAction Stop
+                    Start-Sleep -Milliseconds 200
+                    if (-not (Test-Path $paiTargetPath)) {
+                        $removed = $true
+                        break
+                    }
+                } catch {
+                    if ($i -lt 9) {
+                        Start-Sleep -Milliseconds (500 * ($i + 1))
+                    } else {
+                        try {
+                            $backupPath = "$paiTargetPath.old.$(Get-Date -Format 'yyyyMMddHHmmss')"
+                            Rename-Item -Path $paiTargetPath -NewName (Split-Path $backupPath -Leaf) -Force
+                            $removed = $true
+                        } catch {
+                            Write-Warning "Could not remove or rename existing pai.exe"
+                        }
+                    }
+                }
             }
+            Start-Sleep -Milliseconds 500
         }
         
         Copy-Item -Path $exePath -Destination $paiTargetPath -Force
@@ -768,56 +853,12 @@ try {
         Write-Info "Make sure our PATH entry comes first (it should after restarting PowerShell)"
     }
     
-    # Check which binary is actually being executed
-    Write-Step "Verifying installed binaries..."
-    $actualPaiCmd = Get-Command -Name "pai" -ErrorAction SilentlyContinue
-    $actualPersistenceaiCmd = Get-Command -Name "persistenceai" -ErrorAction SilentlyContinue
-    
-    if ($actualPaiCmd) {
-        Write-Info "Command 'pai' resolves to: $($actualPaiCmd.Source)"
-        if ($actualPaiCmd.Source -ne $paiExeFullPath) {
-            Write-Warning "WARNING: 'pai' command is NOT using our installed binary!"
-            Write-Warning "Expected: $paiExeFullPath"
-            Write-Warning "Actual: $($actualPaiCmd.Source)"
-        }
-    }
-    
-    if ($actualPersistenceaiCmd) {
-        Write-Info "Command 'persistenceai' resolves to: $($actualPersistenceaiCmd.Source)"
-        if ($actualPersistenceaiCmd.Source -ne $exeFullPath) {
-            Write-Warning "WARNING: 'persistenceai' command is NOT using our installed binary!"
-            Write-Warning "Expected: $exeFullPath"
-            Write-Warning "Actual: $($actualPersistenceaiCmd.Source)"
-        }
-    }
-    
-    # Check file info of installed binaries
-    if (Test-Path $exeFullPath) {
-        $installedFileInfo = Get-Item $exeFullPath
-        Write-Info "Installed persistenceai.exe:"
-        Write-Info "  Location: $exeFullPath"
-        Write-Info "  Size: $([math]::Round($installedFileInfo.Length/1MB, 2)) MB"
-        Write-Info "  Modified: $($installedFileInfo.LastWriteTime)"
-    }
-    
-    if (Test-Path $paiExeFullPath) {
-        $installedPaiFileInfo = Get-Item $paiExeFullPath
-        Write-Info "Installed pai.exe:"
-        Write-Info "  Location: $paiExeFullPath"
-        Write-Info "  Size: $([math]::Round($installedPaiFileInfo.Length/1MB, 2)) MB"
-        Write-Info "  Modified: $($installedPaiFileInfo.LastWriteTime)"
-    }
-    
     $versionOutput = & $exeFullPath --version 2>&1 | Select-Object -First 1
     
     # Verify version matches what we downloaded
     if ($Version -and $versionOutput -notlike "*$Version*") {
         Write-Warning "Installed version ($versionOutput) does not match expected version ($Version)"
         Write-Info "The binary may not have been updated correctly"
-        Write-Info "This could indicate:"
-        Write-Info "  1. The file is locked and wasn't replaced"
-        Write-Info "  2. Windows is caching the old executable"
-        Write-Info "  3. A different binary is being executed (check PATH above)"
     }
     
     # Verify both commands work
@@ -849,17 +890,3 @@ try {
     Write-Warning "Installation completed, but version check failed. You may need to restart PowerShell."
     Write-Info "Try running: $exeFullPath --version or $paiExeFullPath --version"
 }
-
-# Final diagnostic summary
-Write-Host ""
-Write-Host "  " -NoNewline; Write-Host "========================================" -ForegroundColor DarkGray
-Write-Host "  " -NoNewline; Write-Host "Diagnostic Information" -ForegroundColor Cyan
-Write-Host "  " -NoNewline; Write-Host "========================================" -ForegroundColor DarkGray
-Write-Host ""
-Write-Info "If you're seeing an older version after installation, check:"
-Write-Info "  1. Restart PowerShell - PATH changes require a new session"
-Write-Info "  2. Close all terminals - file locks prevent updates"
-Write-Info "  3. Check which binary is executed: Get-Command pai | Select-Object Source"
-Write-Info "  4. Verify file was updated: (Get-Item '$exeFullPath').LastWriteTime"
-Write-Info "  5. Check for multiple installations: Get-Command pai -All"
-Write-Host ""
