@@ -1917,14 +1917,11 @@ persistenceai run --model ollama/llama3</code>
                 </span>
                 Windows (PowerShell)
             </h4>
-            <p>Remove PersistenceAI binaries and directories</p>
+            <p>Completely remove PersistenceAI including binaries, cache, and config files</p>
             <div class="command">
-                if (Test-Path &quot;$env:USERPROFILE\.persistenceai\bin&quot;) { Remove-Item -Path &quot;$env:USERPROFILE\.persistenceai\bin\*&quot; -Force -ErrorAction SilentlyContinue }<br>if (Test-Path &quot;$env:USERPROFILE\.pai\bin&quot;) { Remove-Item -Path &quot;$env:USERPROFILE\.pai\bin\*&quot; -Force -ErrorAction SilentlyContinue }
-                <button class="command-copy" onclick="copyToClipboard('if (Test-Path &quot;$env:USERPROFILE\\.persistenceai\\bin&quot;) { Remove-Item -Path &quot;$env:USERPROFILE\\.persistenceai\\bin\\*&quot; -Force -ErrorAction SilentlyContinue }\nif (Test-Path &quot;$env:USERPROFILE\\.pai\\bin&quot;) { Remove-Item -Path &quot;$env:USERPROFILE\\.pai\\bin\\*&quot; -Force -ErrorAction SilentlyContinue }', this, 'windows')">Copy</button>
+                # Stop running processes<br>Get-Process | Where-Object { $_.ProcessName -eq &quot;pai&quot; -or $_.ProcessName -eq &quot;persistenceai&quot; } | Stop-Process -Force -ErrorAction SilentlyContinue<br>Start-Sleep -Seconds 2<br># Remove binaries and directories<br>$dirs = @(&quot;$env:USERPROFILE\.persistenceai&quot;, &quot;$env:USERPROFILE\.pai&quot;, &quot;$env:USERPROFILE\.config\persistenceai&quot;, &quot;$env:USERPROFILE\.config\pai&quot;, &quot;$env:LOCALAPPDATA\persistenceai&quot;, &quot;$env:LOCALAPPDATA\pai&quot;)<br>foreach ($dir in $dirs) { if (Test-Path $dir) { Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue } }<br># Remove from PATH<br>$path = [Environment]::GetEnvironmentVariable(&quot;Path&quot;, &quot;User&quot;)<br>$newPath = ($path -split &quot;;&quot; | Where-Object { $_ -notlike &quot;*\.persistenceai*&quot; -and $_ -notlike &quot;*\.pai*&quot; }) -join &quot;;&quot;<br>[Environment]::SetEnvironmentVariable(&quot;Path&quot;, $newPath, &quot;User&quot;)<br>Write-Host &quot;PersistenceAI completely uninstalled&quot; -ForegroundColor Green
+                <button class="command-copy" onclick="copyToClipboard('# Stop running processes\nGet-Process | Where-Object { $_.ProcessName -eq \'pai\' -or $_.ProcessName -eq \'persistenceai\' } | Stop-Process -Force -ErrorAction SilentlyContinue\nStart-Sleep -Seconds 2\n# Remove binaries and directories\n$dirs = @(\'$env:USERPROFILE\\.persistenceai\', \'$env:USERPROFILE\\.pai\', \'$env:USERPROFILE\\.config\\persistenceai\', \'$env:USERPROFILE\\.config\\pai\', \'$env:LOCALAPPDATA\\persistenceai\', \'$env:LOCALAPPDATA\\pai\')\nforeach ($dir in $dirs) { if (Test-Path $dir) { Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue } }\n# Remove from PATH\n$path = [Environment]::GetEnvironmentVariable(\'Path\', \'User\')\n$newPath = ($path -split \';\' | Where-Object { $_ -notlike \'*\\.persistenceai*\' -and $_ -notlike \'*\\.pai*\' }) -join \';\'\n[Environment]::SetEnvironmentVariable(\'Path\', $newPath, \'User\')\nWrite-Host \'PersistenceAI completely uninstalled\' -ForegroundColor Green', this, 'windows')">Copy</button>
             </div>
-            <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
-                Optional: Remove config files: <code style="font-size: 0.85rem;">if (Test-Path &quot;$env:USERPROFILE\.config\persistenceai&quot;) { Remove-Item -Path &quot;$env:USERPROFILE\.config\persistenceai&quot; -Recurse -Force }</code>
-            </p>
         </div>
 
         <div class="install-method" style="margin-top: 1rem;">
@@ -1936,14 +1933,11 @@ persistenceai run --model ollama/llama3</code>
                 </span>
                 Linux / macOS
             </h4>
-            <p>Remove PersistenceAI binaries and directories</p>
+            <p>Completely remove PersistenceAI including binaries, cache, and config files</p>
             <div class="command">
-                [ -d ~/.persistenceai/bin ] && rm -rf ~/.persistenceai/bin/*<br>[ -d ~/.pai/bin ] && rm -rf ~/.pai/bin/*
-                <button class="command-copy" onclick="copyToClipboard('[ -d ~/.persistenceai/bin ] && rm -rf ~/.persistenceai/bin/*\n[ -d ~/.pai/bin ] && rm -rf ~/.pai/bin/*', this, 'linux')">Copy</button>
+                # Stop running processes<br>pkill -f pai 2>/dev/null; pkill -f persistenceai 2>/dev/null<br>sleep 2<br># Remove all directories<br>rm -rf ~/.persistenceai ~/.pai ~/.config/persistenceai ~/.config/pai ~/.local/share/persistenceai ~/.local/share/pai 2>/dev/null<br># Remove from PATH in shell config files<br>for file in ~/.bashrc ~/.zshrc ~/.bash_profile ~/.profile; do<br>&nbsp;&nbsp;[ -f &quot;$file&quot; ] && sed -i.bak &quot;\\|.persistenceai/bin|d; \\|.pai/bin|d&quot; &quot;$file&quot; 2>/dev/null<br>done<br>echo &quot;PersistenceAI completely uninstalled&quot;
+                <button class="command-copy" onclick="copyToClipboard('# Stop running processes\npkill -f pai 2>/dev/null; pkill -f persistenceai 2>/dev/null\nsleep 2\n# Remove all directories\nrm -rf ~/.persistenceai ~/.pai ~/.config/persistenceai ~/.config/pai ~/.local/share/persistenceai ~/.local/share/pai 2>/dev/null\n# Remove from PATH in shell config files\nfor file in ~/.bashrc ~/.zshrc ~/.bash_profile ~/.profile; do\n  [ -f \'$file\' ] && sed -i.bak \'\\|.persistenceai/bin|d; \\|.pai/bin|d\' \'$file\' 2>/dev/null\ndone\necho \'PersistenceAI completely uninstalled\'', this, 'linux')">Copy</button>
             </div>
-            <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
-                Optional: Remove config files: <code style="font-size: 0.85rem;">[ -d ~/.config/persistenceai ] && rm -rf ~/.config/persistenceai</code>
-            </p>
         </div>
     </section>
 
