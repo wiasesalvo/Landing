@@ -388,7 +388,7 @@ New-Item -ItemType Directory -Force -Path $TEMP_DIR | Out-Null
 
 # Download
 $zipPath = Join-Path $TEMP_DIR $zipName
-if (-not (Download-Binary -Url $downloadUrl -OutputPath $zipPath)) {
+if (-not (Get-Binary -Url $downloadUrl -OutputPath $zipPath)) {
     Remove-Item -Path $TEMP_DIR -Recurse -Force -ErrorAction SilentlyContinue
     exit 1
 }
