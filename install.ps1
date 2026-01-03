@@ -499,10 +499,29 @@ try {
         $sourceFileInfo = Get-Item $exePath
         $sourceHash = (Get-FileHash -Path $exePath -Algorithm SHA256).Hash
         
-        # Get old file hash if it exists
+        # Check version of downloaded file BEFORE installing
+        Write-Step "Checking version of downloaded binary..."
+        try {
+            $downloadedVersion = & $exePath --version 2>&1 | Select-Object -First 1
+            Write-Info "Downloaded binary version: $downloadedVersion"
+        } catch {
+            Write-Warning "Could not check downloaded binary version: $_"
+        }
+        
+        # Get old file info if it exists
         $oldHash = $null
+        $oldVersion = $null
+        $oldModTime = $null
         if (Test-Path $targetPath) {
+            $oldFileInfo = Get-Item $targetPath
             $oldHash = (Get-FileHash -Path $targetPath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
+            $oldModTime = $oldFileInfo.LastWriteTime
+            try {
+                $oldVersion = & $targetPath --version 2>&1 | Select-Object -First 1
+                Write-Info "Existing binary version: $oldVersion (modified: $oldModTime)"
+            } catch {
+                Write-Warning "Could not check existing binary version"
+            }
         }
         
         # Remove target FIRST to ensure clean replacement
@@ -518,19 +537,32 @@ try {
         # Copy new file
         Copy-Item -Path $exePath -Destination $targetPath -Force
         
-        # Verify the file was actually replaced (check hash)
+        # Verify the file was actually replaced (check hash and modification time)
+        Start-Sleep -Milliseconds 200  # Ensure file system has updated
         $targetFileInfo = Get-Item $targetPath
         $targetHash = (Get-FileHash -Path $targetPath -Algorithm SHA256).Hash
+        $targetModTime = $targetFileInfo.LastWriteTime
         
         if ($targetFileInfo.Length -eq $sourceFileInfo.Length -and $targetHash -eq $sourceHash) {
             if ($oldHash -and $targetHash -eq $oldHash) {
                 Write-Warning "WARNING: File hash matches old version - binary was NOT updated!"
+                Write-Info "Old hash: $($oldHash.Substring(0, 16))..."
+                Write-Info "New hash: $($targetHash.Substring(0, 16))..."
                 Write-Info "This usually means the file is locked. Try closing all terminals and reinstalling."
             } else {
                 Write-Success "Installed 'persistenceai' command ($([math]::Round($targetFileInfo.Length/1MB, 2)) MB)"
+                Write-Info "File modified: $targetModTime"
+                if ($oldModTime) {
+                    if ($targetModTime -gt $oldModTime) {
+                        Write-Info "File was updated (newer than previous: $oldModTime)"
+                    } else {
+                        Write-Warning "File modification time is not newer - may indicate caching issue"
+                    }
+                }
             }
         } else {
             Write-Warning "File verification failed - size or hash mismatch"
+            Write-Info "Source size: $($sourceFileInfo.Length) bytes, Target size: $($targetFileInfo.Length) bytes"
         }
     }
     
@@ -690,12 +722,56 @@ try {
         Write-Info "Make sure our PATH entry comes first (it should after restarting PowerShell)"
     }
     
+    # Check which binary is actually being executed
+    Write-Step "Verifying installed binaries..."
+    $actualPaiCmd = Get-Command -Name "pai" -ErrorAction SilentlyContinue
+    $actualPersistenceaiCmd = Get-Command -Name "persistenceai" -ErrorAction SilentlyContinue
+    
+    if ($actualPaiCmd) {
+        Write-Info "Command 'pai' resolves to: $($actualPaiCmd.Source)"
+        if ($actualPaiCmd.Source -ne $paiExeFullPath) {
+            Write-Warning "WARNING: 'pai' command is NOT using our installed binary!"
+            Write-Warning "Expected: $paiExeFullPath"
+            Write-Warning "Actual: $($actualPaiCmd.Source)"
+        }
+    }
+    
+    if ($actualPersistenceaiCmd) {
+        Write-Info "Command 'persistenceai' resolves to: $($actualPersistenceaiCmd.Source)"
+        if ($actualPersistenceaiCmd.Source -ne $exeFullPath) {
+            Write-Warning "WARNING: 'persistenceai' command is NOT using our installed binary!"
+            Write-Warning "Expected: $exeFullPath"
+            Write-Warning "Actual: $($actualPersistenceaiCmd.Source)"
+        }
+    }
+    
+    # Check file info of installed binaries
+    if (Test-Path $exeFullPath) {
+        $installedFileInfo = Get-Item $exeFullPath
+        Write-Info "Installed persistenceai.exe:"
+        Write-Info "  Location: $exeFullPath"
+        Write-Info "  Size: $([math]::Round($installedFileInfo.Length/1MB, 2)) MB"
+        Write-Info "  Modified: $($installedFileInfo.LastWriteTime)"
+    }
+    
+    if (Test-Path $paiExeFullPath) {
+        $installedPaiFileInfo = Get-Item $paiExeFullPath
+        Write-Info "Installed pai.exe:"
+        Write-Info "  Location: $paiExeFullPath"
+        Write-Info "  Size: $([math]::Round($installedPaiFileInfo.Length/1MB, 2)) MB"
+        Write-Info "  Modified: $($installedPaiFileInfo.LastWriteTime)"
+    }
+    
     $versionOutput = & $exeFullPath --version 2>&1 | Select-Object -First 1
     
     # Verify version matches what we downloaded
     if ($Version -and $versionOutput -notlike "*$Version*") {
         Write-Warning "Installed version ($versionOutput) does not match expected version ($Version)"
         Write-Info "The binary may not have been updated correctly"
+        Write-Info "This could indicate:"
+        Write-Info "  1. The file is locked and wasn't replaced"
+        Write-Info "  2. Windows is caching the old executable"
+        Write-Info "  3. A different binary is being executed (check PATH above)"
     }
     
     # Verify both commands work
@@ -727,3 +803,17 @@ try {
     Write-Warning "Installation completed, but version check failed. You may need to restart PowerShell."
     Write-Info "Try running: $exeFullPath --version or $paiExeFullPath --version"
 }
+
+# Final diagnostic summary
+Write-Host ""
+Write-Host "  " -NoNewline; Write-Host "========================================" -ForegroundColor DarkGray
+Write-Host "  " -NoNewline; Write-Host "Diagnostic Information" -ForegroundColor Cyan
+Write-Host "  " -NoNewline; Write-Host "========================================" -ForegroundColor DarkGray
+Write-Host ""
+Write-Info "If you're seeing an older version after installation, check:"
+Write-Info "  1. Restart PowerShell - PATH changes require a new session"
+Write-Info "  2. Close all terminals - file locks prevent updates"
+Write-Info "  3. Check which binary is executed: Get-Command pai | Select-Object Source"
+Write-Info "  4. Verify file was updated: (Get-Item '$exeFullPath').LastWriteTime"
+Write-Info "  5. Check for multiple installations: Get-Command pai -All"
+Write-Host ""
