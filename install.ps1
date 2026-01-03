@@ -84,6 +84,131 @@ function Write-Step {
     Write-Host " $msg" -ForegroundColor White 
 }
 
+# Function to aggressively remove locked files
+function Remove-LockedFile {
+    param(
+        [string]$FilePath,
+        [string]$FileDescription = "file"
+    )
+    
+    if (-not (Test-Path $FilePath)) {
+        return $true
+    }
+    
+    Write-Info "Attempting to remove locked $FileDescription..."
+    
+    # Step 1: Find and kill processes using this file
+    $fileProcesses = @()
+    try {
+        # Get all processes that might be using the file
+        $allProcesses = Get-Process -ErrorAction SilentlyContinue
+        foreach ($proc in $allProcesses) {
+            try {
+                if ($proc.Path -eq $FilePath -or $proc.Path -like "*$FilePath*") {
+                    $fileProcesses += $proc
+                }
+            } catch {
+                # Process might have exited, ignore
+            }
+        }
+        
+        # Also check by process name (pai, persistenceai)
+        $nameProcesses = Get-Process | Where-Object {
+            ($_.ProcessName -eq "pai") -or 
+            ($_.ProcessName -eq "persistenceai") -or
+            ($_.ProcessName -like "*pai*")
+        } -ErrorAction SilentlyContinue
+        
+        $fileProcesses = ($fileProcesses + $nameProcesses) | Select-Object -Unique
+        
+        if ($fileProcesses) {
+            Write-Info "Found $($fileProcesses.Count) process(es) that may be using the file..."
+            foreach ($proc in $fileProcesses) {
+                try {
+                    Write-Info "  Stopping process: $($proc.ProcessName) (PID: $($proc.Id))"
+                    Stop-Process -Id $proc.Id -Force -ErrorAction Stop
+                } catch {
+                    Write-Warning "  Could not stop process $($proc.ProcessName): $_"
+                }
+            }
+            Start-Sleep -Seconds 2  # Wait for processes to fully terminate
+        }
+    } catch {
+        Write-Warning "Could not find/kill processes: $_"
+    }
+    
+    # Step 2: Try multiple removal methods
+    $methods = @(
+        @{ Name = "Remove-Item"; Action = { Remove-Item -Path $FilePath -Force -ErrorAction Stop } },
+        @{ Name = ".NET File.Delete"; Action = { [System.IO.File]::Delete($FilePath) } },
+        @{ Name = "Remove-Item (recurse)"; Action = { Remove-Item -Path $FilePath -Force -Recurse -ErrorAction Stop } }
+    )
+    
+    foreach ($method in $methods) {
+        try {
+            Write-Info "  Trying $($method.Name)..."
+            & $method.Action
+            Start-Sleep -Milliseconds 300
+            if (-not (Test-Path $FilePath)) {
+                Write-Info "  Successfully removed using $($method.Name)"
+                return $true
+            }
+        } catch {
+            Write-Info "  $($method.Name) failed: $_"
+        }
+    }
+    
+    # Step 3: Try rename approach (works even when delete doesn't)
+    try {
+        Write-Info "  Trying rename approach..."
+        $backupName = "$(Split-Path $FilePath -Leaf).old.$(Get-Date -Format 'yyyyMMddHHmmss')"
+        $backupPath = Join-Path (Split-Path $FilePath -Parent) $backupName
+        Rename-Item -Path $FilePath -NewName $backupName -Force -ErrorAction Stop
+        Write-Info "  Renamed file to: $backupName"
+        
+        # Try to delete the renamed file
+        Start-Sleep -Milliseconds 500
+        try {
+            Remove-Item -Path $backupPath -Force -ErrorAction Stop
+            Write-Info "  Successfully deleted renamed file"
+        } catch {
+            Write-Info "  Renamed file exists but couldn't delete: $backupPath (will be cleaned up later)"
+        }
+        return $true
+    } catch {
+        Write-Warning "  Rename approach also failed: $_"
+    }
+    
+    # Step 4: Last resort - schedule deletion on reboot using MoveFileEx
+    try {
+        Write-Warning "  Scheduling file deletion on next reboot..."
+        # Check if type already exists (if script runs multiple times)
+        $typeName = "Win32MoveFile"
+        $namespace = "Win32Functions"
+        $fullTypeName = "$namespace.$typeName"
+        
+        if (-not ([System.Management.Automation.PSTypeName]$fullTypeName).Type) {
+            $type = Add-Type -Name $typeName -Namespace $namespace -PassThru -MemberDefinition @"
+[DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+public static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, int dwFlags);
+"@
+        } else {
+            $type = [Type]"$fullTypeName"
+        }
+        
+        $MOVEFILE_DELAY_UNTIL_REBOOT = 0x4
+        $result = $type::MoveFileEx($FilePath, $null, $MOVEFILE_DELAY_UNTIL_REBOOT)
+        if ($result) {
+            Write-Info "  File will be deleted on next reboot"
+            return $true
+        }
+    } catch {
+        Write-Warning "  Could not schedule reboot deletion: $_"
+    }
+    
+    return $false
+}
+
 # Enterprise banner with ASCII
 Write-Host ""
 Write-Host "  " -NoNewline; Write-Host "========================================" -ForegroundColor Magenta
@@ -459,31 +584,11 @@ try {
             Start-Sleep -Seconds 3  # Increased from 200ms to 3 seconds
         }
         
-        # Remove all files in install directory (not just .exe)
+        # Remove all files in install directory (not just .exe) using aggressive unlocking
         $allFiles = Get-ChildItem -Path $INSTALL_DIR -File -ErrorAction SilentlyContinue
         foreach ($file in $allFiles) {
-            try {
-                # Retry logic for locked files with longer waits
-                $retries = 5
-                $retryDelay = 1000
-                for ($i = 0; $i -lt $retries; $i++) {
-                    try {
-                        # Try to unlock file first by removing read-only attribute
-                        if (Test-Path $file.FullName) {
-                            $file.Attributes = 'Normal'
-                        }
-                        Remove-Item -Path $file.FullName -Force -ErrorAction Stop
-                        break
-                    } catch {
-                        if ($i -lt $retries - 1) {
-                            Start-Sleep -Milliseconds $retryDelay
-                            $retryDelay *= 2
-                        } else {
-                            throw
-                        }
-                    }
-                }
-            } catch {
+            $removed = Remove-LockedFile -FilePath $file.FullName -FileDescription $file.Name
+            if (-not $removed) {
                 Write-Warning "Could not remove $($file.Name), will attempt overwrite"
             }
         }
@@ -526,74 +631,49 @@ try {
         
         # Remove target FIRST to ensure clean replacement (aggressive removal for locked files)
         if (Test-Path $targetPath) {
-            Write-Info "Removing existing $APP_NAME.exe..."
-            $removed = $false
-            $retries = 10
-            $retryDelay = 500
+            Write-Step "Removing existing $APP_NAME.exe (unlocking if necessary)..."
             
-            for ($i = 0; $i -lt $retries; $i++) {
-                try {
-                    # Try to remove read-only attribute first
-                    $targetFile = Get-Item $targetPath -Force -ErrorAction SilentlyContinue
-                    if ($targetFile) {
-                        $targetFile.Attributes = 'Normal'
-                    }
-                    
-                    # Try to remove the file
-                    Remove-Item -Path $targetPath -Force -ErrorAction Stop
-                    
-                    # Verify it's actually gone
-                    Start-Sleep -Milliseconds 200
-                    if (-not (Test-Path $targetPath)) {
-                        $removed = $true
-                        Write-Info "Successfully removed existing $APP_NAME.exe"
-                        break
-                    }
-                } catch {
-                    if ($i -lt $retries - 1) {
-                        Write-Info "Attempt $($i + 1)/$retries failed, retrying in $($retryDelay)ms..."
-                        Start-Sleep -Milliseconds $retryDelay
-                        $retryDelay *= 1.5
-                    } else {
-                        Write-Warning "Could not remove existing $APP_NAME.exe after $retries attempts"
-                        Write-Warning "File may be locked by another process. Trying rename approach..."
-                        
-                        # Last resort: try to rename the old file
-                        try {
-                            $backupPath = "$targetPath.old.$(Get-Date -Format 'yyyyMMddHHmmss')"
-                            Rename-Item -Path $targetPath -NewName (Split-Path $backupPath -Leaf) -Force -ErrorAction Stop
-                            Write-Info "Renamed old file to backup: $backupPath"
-                            $removed = $true
-                        } catch {
-                            Write-Warning "Could not rename file either. Copy may fail if file is locked."
-                        }
-                    }
-                }
-            }
+            # Try to unlock and remove the file using aggressive method
+            $removed = Remove-LockedFile -FilePath $targetPath -FileDescription "$APP_NAME.exe"
             
             if (-not $removed) {
-                Write-Warning "WARNING: Old file may still exist. Installation may fail or not update correctly."
+                Write-Warning "Could not remove $APP_NAME.exe - file is locked"
+                Write-Warning "The file may be in use by another process or Windows is caching it"
+                Write-Info "Attempting to install anyway (may overwrite on next reboot)..."
+            } else {
+                Write-Success "Successfully removed existing $APP_NAME.exe"
             }
             
             # Additional wait to ensure file handles are fully released
-            Start-Sleep -Milliseconds 500
+            Start-Sleep -Seconds 1
         }
         
-        # Copy new file (use Move-Item if target still exists and is locked, as a workaround)
+        # Copy new file - if old file still exists (locked), rename it first then copy new one
         if (Test-Path $targetPath) {
-            Write-Warning "Target file still exists, attempting to overwrite with Move-Item..."
+            Write-Warning "Target file still exists (may be locked), using rename-then-copy strategy..."
             try {
-                # Move new file to temp name first, then rename
-                $tempTarget = "$targetPath.new"
-                Copy-Item -Path $exePath -Destination $tempTarget -Force
-                Start-Sleep -Milliseconds 200
-                Move-Item -Path $tempTarget -Destination $targetPath -Force
+                # Rename old file to .old (this usually works even when delete doesn't)
+                $oldFileBackup = "$targetPath.old.$(Get-Date -Format 'yyyyMMddHHmmss')"
+                Rename-Item -Path $targetPath -NewName (Split-Path $oldFileBackup -Leaf) -Force -ErrorAction Stop
+                Write-Info "Renamed old file to backup, now copying new file..."
+                Start-Sleep -Milliseconds 300
             } catch {
-                Write-Warning "Move-Item approach failed, trying direct Copy-Item..."
-                Copy-Item -Path $exePath -Destination $targetPath -Force
+                Write-Warning "Could not rename old file: $_"
+                Write-Info "Attempting direct copy (may fail if file is locked)..."
             }
-        } else {
-            Copy-Item -Path $exePath -Destination $targetPath -Force
+        }
+        
+        # Copy the new file
+        Copy-Item -Path $exePath -Destination $targetPath -Force
+        
+        # Try to clean up the old backup file if it exists
+        $oldBackups = Get-ChildItem -Path $INSTALL_DIR -Filter "$APP_NAME.exe.old.*" -ErrorAction SilentlyContinue
+        foreach ($backup in $oldBackups) {
+            try {
+                Remove-Item -Path $backup.FullName -Force -ErrorAction SilentlyContinue
+            } catch {
+                # Ignore - will be cleaned up later or on reboot
+            }
         }
         
         # Verify the file was actually replaced (check hash and modification time)
@@ -637,74 +717,49 @@ try {
         
         # Remove target FIRST to ensure clean replacement (aggressive removal for locked files)
         if (Test-Path $paiTargetPath) {
-            Write-Info "Removing existing pai.exe..."
-            $removed = $false
-            $retries = 10
-            $retryDelay = 500
+            Write-Step "Removing existing pai.exe (unlocking if necessary)..."
             
-            for ($i = 0; $i -lt $retries; $i++) {
-                try {
-                    # Try to remove read-only attribute first
-                    $targetFile = Get-Item $paiTargetPath -Force -ErrorAction SilentlyContinue
-                    if ($targetFile) {
-                        $targetFile.Attributes = 'Normal'
-                    }
-                    
-                    # Try to remove the file
-                    Remove-Item -Path $paiTargetPath -Force -ErrorAction Stop
-                    
-                    # Verify it's actually gone
-                    Start-Sleep -Milliseconds 200
-                    if (-not (Test-Path $paiTargetPath)) {
-                        $removed = $true
-                        Write-Info "Successfully removed existing pai.exe"
-                        break
-                    }
-                } catch {
-                    if ($i -lt $retries - 1) {
-                        Write-Info "Attempt $($i + 1)/$retries failed, retrying in $($retryDelay)ms..."
-                        Start-Sleep -Milliseconds $retryDelay
-                        $retryDelay *= 1.5
-                    } else {
-                        Write-Warning "Could not remove existing pai.exe after $retries attempts"
-                        Write-Warning "File may be locked by another process. Trying rename approach..."
-                        
-                        # Last resort: try to rename the old file
-                        try {
-                            $backupPath = "$paiTargetPath.old.$(Get-Date -Format 'yyyyMMddHHmmss')"
-                            Rename-Item -Path $paiTargetPath -NewName (Split-Path $backupPath -Leaf) -Force -ErrorAction Stop
-                            Write-Info "Renamed old file to backup: $backupPath"
-                            $removed = $true
-                        } catch {
-                            Write-Warning "Could not rename file either. Copy may fail if file is locked."
-                        }
-                    }
-                }
-            }
+            # Try to unlock and remove the file using aggressive method
+            $removed = Remove-LockedFile -FilePath $paiTargetPath -FileDescription "pai.exe"
             
             if (-not $removed) {
-                Write-Warning "WARNING: Old file may still exist. Installation may fail or not update correctly."
+                Write-Warning "Could not remove pai.exe - file is locked"
+                Write-Warning "The file may be in use by another process or Windows is caching it"
+                Write-Info "Attempting to install anyway (may overwrite on next reboot)..."
+            } else {
+                Write-Success "Successfully removed existing pai.exe"
             }
             
             # Additional wait to ensure file handles are fully released
-            Start-Sleep -Milliseconds 500
+            Start-Sleep -Seconds 1
         }
         
-        # Copy new file (use Move-Item if target still exists and is locked, as a workaround)
+        # Copy new file - if old file still exists (locked), rename it first then copy new one
         if (Test-Path $paiTargetPath) {
-            Write-Warning "Target file still exists, attempting to overwrite with Move-Item..."
+            Write-Warning "Target file still exists (may be locked), using rename-then-copy strategy..."
             try {
-                # Move new file to temp name first, then rename
-                $tempTarget = "$paiTargetPath.new"
-                Copy-Item -Path $paiExePath -Destination $tempTarget -Force
-                Start-Sleep -Milliseconds 200
-                Move-Item -Path $tempTarget -Destination $paiTargetPath -Force
+                # Rename old file to .old (this usually works even when delete doesn't)
+                $oldFileBackup = "$paiTargetPath.old.$(Get-Date -Format 'yyyyMMddHHmmss')"
+                Rename-Item -Path $paiTargetPath -NewName (Split-Path $oldFileBackup -Leaf) -Force -ErrorAction Stop
+                Write-Info "Renamed old file to backup, now copying new file..."
+                Start-Sleep -Milliseconds 300
             } catch {
-                Write-Warning "Move-Item approach failed, trying direct Copy-Item..."
-                Copy-Item -Path $paiExePath -Destination $paiTargetPath -Force
+                Write-Warning "Could not rename old file: $_"
+                Write-Info "Attempting direct copy (may fail if file is locked)..."
             }
-        } else {
-            Copy-Item -Path $paiExePath -Destination $paiTargetPath -Force
+        }
+        
+        # Copy the new file
+        Copy-Item -Path $paiExePath -Destination $paiTargetPath -Force
+        
+        # Try to clean up the old backup file if it exists
+        $oldBackups = Get-ChildItem -Path $INSTALL_DIR -Filter "pai.exe.old.*" -ErrorAction SilentlyContinue
+        foreach ($backup in $oldBackups) {
+            try {
+                Remove-Item -Path $backup.FullName -Force -ErrorAction SilentlyContinue
+            } catch {
+                # Ignore - will be cleaned up later or on reboot
+            }
         }
         
         # Verify the file was actually replaced (check hash and modification time)
@@ -739,33 +794,18 @@ try {
         
         # Remove target FIRST if it exists (aggressive removal)
         if (Test-Path $paiTargetPath) {
-            Write-Info "Removing existing pai.exe..."
-            $removed = $false
-            for ($i = 0; $i -lt 10; $i++) {
-                try {
-                    $targetFile = Get-Item $paiTargetPath -Force -ErrorAction SilentlyContinue
-                    if ($targetFile) { $targetFile.Attributes = 'Normal' }
-                    Remove-Item -Path $paiTargetPath -Force -ErrorAction Stop
-                    Start-Sleep -Milliseconds 200
-                    if (-not (Test-Path $paiTargetPath)) {
-                        $removed = $true
-                        break
-                    }
-                } catch {
-                    if ($i -lt 9) {
-                        Start-Sleep -Milliseconds (500 * ($i + 1))
-                    } else {
-                        try {
-                            $backupPath = "$paiTargetPath.old.$(Get-Date -Format 'yyyyMMddHHmmss')"
-                            Rename-Item -Path $paiTargetPath -NewName (Split-Path $backupPath -Leaf) -Force
-                            $removed = $true
-                        } catch {
-                            Write-Warning "Could not remove or rename existing pai.exe"
-                        }
-                    }
-                }
+            Write-Step "Removing existing pai.exe (unlocking if necessary)..."
+            
+            # Try to unlock and remove the file using aggressive method
+            $removed = Remove-LockedFile -FilePath $paiTargetPath -FileDescription "pai.exe"
+            
+            if (-not $removed) {
+                Write-Warning "Could not remove pai.exe - file is locked"
+            } else {
+                Write-Success "Successfully removed existing pai.exe"
             }
-            Start-Sleep -Milliseconds 500
+            
+            Start-Sleep -Seconds 1
         }
         
         Copy-Item -Path $exePath -Destination $paiTargetPath -Force
