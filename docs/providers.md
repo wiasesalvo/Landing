@@ -23,7 +23,7 @@ PersistenceAI supports multiple LLM providers. You can configure API keys for an
 
 PersistenceAI supports all major LLM providers:
 
-- **OpenAI** - GPT-4, GPT-3.5, and more
+- **OpenAI** - GPT and more
 - **Anthropic** - Claude models
 - **Google** - Gemini models
 - **Ollama** - Local models (self-hosted)
@@ -102,7 +102,7 @@ You can switch between models using:
 ### OpenAI
 
 - Requires API key from [platform.openai.com](https://platform.openai.com)
-- Supports GPT-4, GPT-3.5, and other models
+- Supports GPT and other models
 - Usage-based billing
 
 ### Anthropic
