@@ -95,6 +95,8 @@ Write-Host ""
 # Configuration
 $BASE_URL = "https://persistence-ai.github.io/Landing"
 $APP_NAME = "persistenceai"
+
+# Default install directory (can be overridden by env var or command-line argument)
 $INSTALL_DIR = "$env:USERPROFILE\.persistenceai\bin"
 $TEMP_DIR = "$env:TEMP\persistenceai-install"
 
@@ -110,10 +112,44 @@ if ($arch -ne "x64") {
 $platform = "$os-$arch"
 $zipName = "$APP_NAME-$platform.zip"
 
-# Determine version
+# Determine version and install directory
 $Version = $null
-if ($args.Count -gt 0) {
-    $Version = $args[0]
+$customInstallDir = $null
+
+# Parse arguments: [version] [--install-dir <path>]
+for ($i = 0; $i -lt $args.Count; $i++) {
+    if ($args[$i] -eq "--install-dir" -or $args[$i] -eq "-d") {
+        if ($i + 1 -lt $args.Count) {
+            $customInstallDir = $args[$i + 1]
+            $i++ # Skip next argument as it's the path
+        }
+    } elseif (-not $Version -and $args[$i] -notlike "-*") {
+        $Version = $args[$i]
+    }
+}
+
+# Set install directory (priority: command-line arg > env var > default)
+# This allows installation to any directory the user wants
+if ($customInstallDir) {
+    $INSTALL_DIR = $customInstallDir
+    Write-Info "Using install directory from argument: $INSTALL_DIR"
+} elseif ($env:PERSISTENCEAI_INSTALL_DIR) {
+    $INSTALL_DIR = $env:PERSISTENCEAI_INSTALL_DIR
+    Write-Info "Using install directory from environment: $INSTALL_DIR"
+}
+
+# Ensure install directory is absolute path
+if (-not [System.IO.Path]::IsPathRooted($INSTALL_DIR)) {
+    $resolved = Resolve-Path $INSTALL_DIR -ErrorAction SilentlyContinue
+    if ($resolved) {
+        $INSTALL_DIR = $resolved.Path
+    } else {
+        # If relative path, make it relative to current directory
+        $INSTALL_DIR = (Resolve-Path (Join-Path (Get-Location) $INSTALL_DIR)).Path
+    }
+}
+
+if ($Version) {
     Write-Info "Installing version: $Version"
 } else {
     Write-Step "Fetching latest version"
@@ -233,10 +269,20 @@ try {
 
 Write-Info "Download URL: $downloadUrl"
 
-# Check if already installed
+# Check if already installed (detect from any location)
 $existingPath = Get-Command -Name $APP_NAME -ErrorAction SilentlyContinue
 if ($existingPath) {
+    $existingInstallDir = Split-Path $existingPath.Source -Parent
     Write-Info "PersistenceAI is already installed at: $($existingPath.Source)"
+    
+    # If no custom install directory specified, use existing installation location
+    if (-not $customInstallDir -and -not $env:PERSISTENCEAI_INSTALL_DIR) {
+        $INSTALL_DIR = $existingInstallDir
+        Write-Info "Using existing installation directory: $INSTALL_DIR"
+    } elseif ($INSTALL_DIR -ne $existingInstallDir) {
+        Write-Info "Will install to: $INSTALL_DIR (different from existing: $existingInstallDir)"
+    }
+    
     $currentVersion = & $existingPath.Source --version 2>&1 | Select-Object -First 1
     Write-Info "Current version: $currentVersion"
     
