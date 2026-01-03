@@ -97,44 +97,91 @@ function Remove-LockedFile {
     
     Write-Info "Attempting to remove locked $FileDescription..."
     
-    # Step 1: Find and kill processes using this file
+    # Step 1: Find and kill processes using this file (using multiple methods)
     $fileProcesses = @()
+    
+    # Method 1: Find by process name (pai, persistenceai)
     try {
-        # Get all processes that might be using the file
+        $nameProcesses = Get-Process | Where-Object {
+            ($_.ProcessName -eq "pai") -or 
+            ($_.ProcessName -eq "persistenceai") -or
+            ($_.ProcessName -like "*pai*")
+        } -ErrorAction SilentlyContinue
+        $fileProcesses += $nameProcesses
+    } catch {
+        Write-Warning "Could not find processes by name: $_"
+    }
+    
+    # Method 2: Find by executable path
+    try {
         $allProcesses = Get-Process -ErrorAction SilentlyContinue
         foreach ($proc in $allProcesses) {
             try {
-                if ($proc.Path -eq $FilePath -or $proc.Path -like "*$FilePath*") {
+                if ($proc.Path -and ($proc.Path -eq $FilePath -or $proc.Path -like "*$FilePath*")) {
                     $fileProcesses += $proc
                 }
             } catch {
                 # Process might have exited, ignore
             }
         }
-        
-        # Also check by process name (pai, persistenceai)
-        $nameProcesses = Get-Process | Where-Object {
-            ($_.ProcessName -eq "pai") -or 
-            ($_.ProcessName -eq "persistenceai") -or
-            ($_.ProcessName -like "*pai*")
-        } -ErrorAction SilentlyContinue
-        
-        $fileProcesses = ($fileProcesses + $nameProcesses) | Select-Object -Unique
-        
-        if ($fileProcesses) {
-            Write-Info "Found $($fileProcesses.Count) process(es) that may be using the file..."
-            foreach ($proc in $fileProcesses) {
-                try {
-                    Write-Info "  Stopping process: $($proc.ProcessName) (PID: $($proc.Id))"
-                    Stop-Process -Id $proc.Id -Force -ErrorAction Stop
-                } catch {
-                    Write-Warning "  Could not stop process $($proc.ProcessName): $_"
+    } catch {
+        Write-Warning "Could not find processes by path: $_"
+    }
+    
+    # Method 3: Use WMI to find processes with open handles to this file (more accurate)
+    try {
+        $normalizedPath = $FilePath.Replace('\', '\\')
+        $wmiQuery = "SELECT * FROM Win32_Process WHERE ExecutablePath = '$normalizedPath'"
+        $wmiProcesses = Get-WmiObject -Query $wmiQuery -ErrorAction SilentlyContinue
+        foreach ($wmiProc in $wmiProcesses) {
+            try {
+                $proc = Get-Process -Id $wmiProc.ProcessId -ErrorAction SilentlyContinue
+                if ($proc) {
+                    $fileProcesses += $proc
                 }
+            } catch {
+                # Process might have exited
             }
-            Start-Sleep -Seconds 2  # Wait for processes to fully terminate
         }
     } catch {
-        Write-Warning "Could not find/kill processes: $_"
+        # WMI might not be available or query might fail
+    }
+    
+    $fileProcesses = $fileProcesses | Select-Object -Unique
+    
+    if ($fileProcesses) {
+        Write-Info "Found $($fileProcesses.Count) process(es) that may be using the file..."
+        foreach ($proc in $fileProcesses) {
+            try {
+                Write-Info "  Stopping process: $($proc.ProcessName) (PID: $($proc.Id))"
+                # Try graceful shutdown first
+                $proc.CloseMainWindow() | Out-Null
+                Start-Sleep -Milliseconds 500
+                # Then force kill if still running
+                if (-not $proc.HasExited) {
+                    Stop-Process -Id $proc.Id -Force -ErrorAction Stop
+                }
+            } catch {
+                Write-Warning "  Could not stop process $($proc.ProcessName): $_"
+            }
+        }
+        Start-Sleep -Seconds 3  # Wait longer for processes to fully terminate and release handles
+    } else {
+        Write-Info "No running processes found that are using the file"
+        Write-Warning "File may be locked by:"
+        Write-Warning "  - Windows Defender or antivirus (scanning the file)"
+        Write-Warning "  - Windows file system cache (file handle not released)"
+        Write-Warning "  - System process (explorer.exe, svchost.exe, etc.)"
+        Write-Warning "  - File is in use by Windows itself"
+        
+        # Try to flush file system cache
+        try {
+            Write-Info "Attempting to flush file system cache..."
+            [System.GC]::Collect()
+            [System.GC]::WaitForPendingFinalizers()
+        } catch {
+            # Ignore
+        }
     }
     
     # Step 2: Try multiple removal methods
@@ -648,23 +695,70 @@ try {
             Start-Sleep -Seconds 1
         }
         
-        # Copy new file - if old file still exists (locked), rename it first then copy new one
+        # Copy new file - use multiple strategies for locked files
         if (Test-Path $targetPath) {
-            Write-Warning "Target file still exists (may be locked), using rename-then-copy strategy..."
+            Write-Warning "Target file still exists (may be locked), trying multiple replacement strategies..."
+            
+            # Strategy 1: Try robocopy (handles locked files better than Copy-Item)
+            $success = $false
             try {
-                # Rename old file to .old (this usually works even when delete doesn't)
-                $oldFileBackup = "$targetPath.old.$(Get-Date -Format 'yyyyMMddHHmmss')"
-                Rename-Item -Path $targetPath -NewName (Split-Path $oldFileBackup -Leaf) -Force -ErrorAction Stop
-                Write-Info "Renamed old file to backup, now copying new file..."
-                Start-Sleep -Milliseconds 300
+                Write-Info "Attempting robocopy replacement..."
+                $tempDir = Join-Path $env:TEMP "pai-replace-$(Get-Date -Format 'yyyyMMddHHmmss')"
+                New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+                $tempFile = Join-Path $tempDir (Split-Path $targetPath -Leaf)
+                Copy-Item -Path $exePath -Destination $tempFile -Force
+                
+                # Robocopy with /PURGE to delete destination files, /MOV to move (delete source)
+                # /R:10 retries 10 times, /W:3 waits 3 seconds between retries
+                $null = & robocopy $tempDir (Split-Path $targetPath -Parent) (Split-Path $targetPath -Leaf) /PURGE /MOV /R:10 /W:3 /NP /NFL /NDL /NJH /NJS 2>&1
+                $robocopyExitCode = $LASTEXITCODE
+                
+                # Robocopy exit codes: 0-7 are success, 8+ are errors
+                if ($robocopyExitCode -le 7) {
+                    Write-Success "Successfully replaced file using robocopy"
+                    $success = $true
+                } else {
+                    Write-Warning "Robocopy exit code: $robocopyExitCode (may indicate locked file)"
+                }
+                
+                # Cleanup temp directory
+                Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
             } catch {
-                Write-Warning "Could not rename old file: $_"
-                Write-Info "Attempting direct copy (may fail if file is locked)..."
+                Write-Warning "Robocopy approach failed: $_"
             }
+            
+            # Strategy 2: If robocopy failed, try rename-then-copy (rename usually works even when delete doesn't)
+            if (-not $success) {
+                try {
+                    Write-Info "Attempting rename-then-copy strategy..."
+                    $oldFileBackup = "$targetPath.old.$(Get-Date -Format 'yyyyMMddHHmmss')"
+                    Rename-Item -Path $targetPath -NewName (Split-Path $oldFileBackup -Leaf) -Force -ErrorAction Stop
+                    Write-Info "Renamed old file, now copying new file..."
+                    Start-Sleep -Milliseconds 500
+                    Copy-Item -Path $exePath -Destination $targetPath -Force
+                    Write-Success "Successfully replaced file using rename-then-copy"
+                    $success = $true
+                    
+                    # Try to delete the renamed old file
+                    try {
+                        Remove-Item -Path (Join-Path (Split-Path $targetPath -Parent) (Split-Path $oldFileBackup -Leaf)) -Force -ErrorAction SilentlyContinue
+                    } catch {
+                        # Old file will be cleaned up later
+                    }
+                } catch {
+                    Write-Warning "Rename approach failed: $_"
+                }
+            }
+            
+            # Strategy 3: Last resort - direct copy (may fail if file is truly locked)
+            if (-not $success) {
+                Write-Warning "All strategies failed, attempting direct copy (likely to fail if file is locked)..."
+                Copy-Item -Path $exePath -Destination $targetPath -Force
+            }
+        } else {
+            # File doesn't exist, simple copy
+            Copy-Item -Path $exePath -Destination $targetPath -Force
         }
-        
-        # Copy the new file
-        Copy-Item -Path $exePath -Destination $targetPath -Force
         
         # Try to clean up the old backup file if it exists
         $oldBackups = Get-ChildItem -Path $INSTALL_DIR -Filter "$APP_NAME.exe.old.*" -ErrorAction SilentlyContinue
@@ -734,23 +828,54 @@ try {
             Start-Sleep -Seconds 1
         }
         
-        # Copy new file - if old file still exists (locked), rename it first then copy new one
+        # Copy new file - use multiple strategies for locked files
         if (Test-Path $paiTargetPath) {
-            Write-Warning "Target file still exists (may be locked), using rename-then-copy strategy..."
+            Write-Warning "Target file still exists (may be locked), trying multiple replacement strategies..."
+            
+            # Strategy 1: Try robocopy
+            $success = $false
             try {
-                # Rename old file to .old (this usually works even when delete doesn't)
-                $oldFileBackup = "$paiTargetPath.old.$(Get-Date -Format 'yyyyMMddHHmmss')"
-                Rename-Item -Path $paiTargetPath -NewName (Split-Path $oldFileBackup -Leaf) -Force -ErrorAction Stop
-                Write-Info "Renamed old file to backup, now copying new file..."
-                Start-Sleep -Milliseconds 300
+                Write-Info "Attempting robocopy replacement..."
+                $tempDir = Join-Path $env:TEMP "pai-replace-$(Get-Date -Format 'yyyyMMddHHmmss')"
+                New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+                $tempFile = Join-Path $tempDir (Split-Path $paiTargetPath -Leaf)
+                Copy-Item -Path $paiExePath -Destination $tempFile -Force
+                
+                $null = & robocopy $tempDir (Split-Path $paiTargetPath -Parent) (Split-Path $paiTargetPath -Leaf) /PURGE /MOV /R:10 /W:3 /NP /NFL /NDL /NJH /NJS 2>&1
+                $robocopyExitCode = $LASTEXITCODE
+                
+                if ($robocopyExitCode -le 7) {
+                    Write-Success "Successfully replaced file using robocopy"
+                    $success = $true
+                }
+                
+                Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
             } catch {
-                Write-Warning "Could not rename old file: $_"
-                Write-Info "Attempting direct copy (may fail if file is locked)..."
+                Write-Warning "Robocopy approach failed: $_"
             }
+            
+            # Strategy 2: Rename-then-copy
+            if (-not $success) {
+                try {
+                    Write-Info "Attempting rename-then-copy strategy..."
+                    $oldFileBackup = "$paiTargetPath.old.$(Get-Date -Format 'yyyyMMddHHmmss')"
+                    Rename-Item -Path $paiTargetPath -NewName (Split-Path $oldFileBackup -Leaf) -Force -ErrorAction Stop
+                    Start-Sleep -Milliseconds 500
+                    Copy-Item -Path $paiExePath -Destination $paiTargetPath -Force
+                    Write-Success "Successfully replaced file using rename-then-copy"
+                    $success = $true
+                } catch {
+                    Write-Warning "Rename approach failed: $_"
+                }
+            }
+            
+            # Strategy 3: Direct copy
+            if (-not $success) {
+                Copy-Item -Path $paiExePath -Destination $paiTargetPath -Force
+            }
+        } else {
+            Copy-Item -Path $paiExePath -Destination $paiTargetPath -Force
         }
-        
-        # Copy the new file
-        Copy-Item -Path $paiExePath -Destination $paiTargetPath -Force
         
         # Try to clean up the old backup file if it exists
         $oldBackups = Get-ChildItem -Path $INSTALL_DIR -Filter "pai.exe.old.*" -ErrorAction SilentlyContinue
