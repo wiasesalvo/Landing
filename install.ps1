@@ -238,6 +238,14 @@ function Install-Binary {
         [string]$TargetPath
     )
     
+    # Debug: Show source file modification time
+    if (Test-Path $SourcePath) {
+        $sourceFile = Get-Item $SourcePath
+        $sourceModTime = $sourceFile.LastWriteTime
+        $timeSinceSource = (Get-Date) - $sourceModTime
+        Write-Info "Source file modified: $sourceModTime ($([math]::Round($timeSinceSource.TotalMinutes, 1)) minutes ago)"
+    }
+    
     # Stop running processes (simple, like OpenCode)
     $processes = Get-Process | Where-Object {
         ($_.ProcessName -eq "pai") -or 
@@ -252,8 +260,12 @@ function Install-Binary {
         Start-Sleep -Seconds 2
     }
     
-    # Remove old file if it exists (simple Remove-Item, like OpenCode's fs.rm)
+    # Debug: Show existing target file modification time (if it exists)
     if (Test-Path $TargetPath) {
+        $oldFile = Get-Item $TargetPath
+        $oldModTime = $oldFile.LastWriteTime
+        $timeSinceOld = (Get-Date) - $oldModTime
+        Write-Info "Existing file modified: $oldModTime ($([math]::Round($timeSinceOld.TotalMinutes, 1)) minutes ago)"
         Write-Info "Removing existing file..."
         try {
             Remove-Item -Path $TargetPath -Force -ErrorAction Stop
@@ -267,7 +279,24 @@ function Install-Binary {
     Write-Info "Installing binary..."
     try {
         Move-Item -Path $SourcePath -Destination $TargetPath -Force -ErrorAction Stop
-        Write-Success "Binary installed successfully"
+        
+        # Debug: Verify installed file modification time
+        Start-Sleep -Milliseconds 500  # Give Windows time to update metadata
+        if (Test-Path $TargetPath) {
+            $installedFile = Get-Item $TargetPath
+            $installedModTime = $installedFile.LastWriteTime
+            $timeSinceInstalled = (Get-Date) - $installedModTime
+            Write-Info "Installed file modified: $installedModTime ($([math]::Round($timeSinceInstalled.TotalMinutes, 2)) minutes ago)"
+            
+            # Warn if modification time is old (more than 2 minutes)
+            if ($timeSinceInstalled.TotalMinutes -gt 2) {
+                Write-Warning "WARNING: Installed file modification time is $([math]::Round($timeSinceInstalled.TotalMinutes, 1)) minutes old!"
+                Write-Warning "This may indicate the file was not properly updated."
+            } else {
+                Write-Success "Binary installed successfully (file timestamp verified)"
+            }
+        }
+        
         return $true
     } catch {
         Write-Error "Installation failed: $_"
