@@ -335,38 +335,81 @@ function Update-Path {
 }
 
 # ============================================================================
-# Uninstall Function (Following OpenCode Pattern)
+# Uninstall Function (Enhanced with File Lock Handling)
 # ============================================================================
 
 function Uninstall-PersistenceAI {
     Write-Step "Uninstalling PersistenceAI..."
     
-    # Stop processes
+    # Stop processes aggressively (including child processes)
     $processes = Get-Process | Where-Object {
         ($_.ProcessName -eq "pai") -or 
         ($_.ProcessName -eq "persistenceai")
     } -ErrorAction SilentlyContinue
     
     if ($processes) {
-        Write-Info "Stopping running processes..."
+        Write-Info "Stopping running processes (including child processes)..."
         foreach ($proc in $processes) {
-            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            try {
+                # Use taskkill with /T to kill process tree
+                Start-Process -FilePath "taskkill" -ArgumentList "/F", "/T", "/PID", $proc.Id -Wait -NoNewWindow -ErrorAction SilentlyContinue | Out-Null
+            } catch {
+                # Fallback to Stop-Process
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            }
         }
-        Start-Sleep -Seconds 2
+        Start-Sleep -Seconds 3
     }
     
-    # Remove directories (like OpenCode's fs.rm with recursive: true, force: true)
+    # Remove directories with retry logic
     $dirsToRemove = @(
         "$env:USERPROFILE\.persistenceai",
         "$env:USERPROFILE\.pai",
+        "$env:USERPROFILE\.config\persistenceai",
+        "$env:USERPROFILE\.config\pai",
         "$env:LOCALAPPDATA\persistenceai",
         "$env:LOCALAPPDATA\pai"
     )
     
+    # Also find installation directories from PATH
+    $paiCmd = Get-Command -Name "pai" -ErrorAction SilentlyContinue
+    $persistenceaiCmd = Get-Command -Name "persistenceai" -ErrorAction SilentlyContinue
+    
+    if ($paiCmd) {
+        $binDir = Split-Path $paiCmd.Source -Parent
+        $installDir = Split-Path $binDir -Parent
+        if ($installDir -and $installDir -notin $dirsToRemove) {
+            $dirsToRemove += $installDir
+        }
+    }
+    
+    if ($persistenceaiCmd) {
+        $binDir = Split-Path $persistenceaiCmd.Source -Parent
+        $installDir = Split-Path $binDir -Parent
+        if ($installDir -and $installDir -notin $dirsToRemove) {
+            $dirsToRemove += $installDir
+        }
+    }
+    
     foreach ($dir in $dirsToRemove) {
         if (Test-Path $dir) {
             Write-Info "Removing $dir..."
-            Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue
+            $maxRetries = 3
+            
+            for ($i = 1; $i -le $maxRetries; $i++) {
+                try {
+                    Remove-Item -Path $dir -Recurse -Force -ErrorAction Stop
+                    break
+                } catch {
+                    if ($i -lt $maxRetries) {
+                        Write-Warning "Attempt $i failed, retrying in 2 seconds..."
+                        Start-Sleep -Seconds 2
+                    } else {
+                        Write-Warning "Could not remove $dir after $maxRetries attempts"
+                        Write-Info "Files may be locked. Try running the standalone uninstall.ps1 script or restart your computer."
+                    }
+                }
+            }
         }
     }
     
@@ -483,6 +526,23 @@ if (-not (Test-Path $exeFullPath) -or -not (Test-Path $paiExeFullPath)) {
 try {
     $versionOutput = & $exeFullPath --version 2>&1 | Select-Object -First 1
     Write-Success "Installed version: $versionOutput"
+    
+    # Debug: Show final file modification times
+    Write-Host ""
+    Write-Host "  " -NoNewline; Write-Host "Debug Information:" -ForegroundColor Cyan
+    if (Test-Path $exeFullPath) {
+        $finalFile = Get-Item $exeFullPath
+        $finalModTime = $finalFile.LastWriteTime
+        $timeSinceFinal = (Get-Date) - $finalModTime
+        Write-Info "persistenceai.exe last modified: $finalModTime ($([math]::Round($timeSinceFinal.TotalMinutes, 2)) minutes ago)"
+    }
+    if (Test-Path $paiExeFullPath) {
+        $finalPaiFile = Get-Item $paiExeFullPath
+        $finalPaiModTime = $finalPaiFile.LastWriteTime
+        $timeSinceFinalPai = (Get-Date) - $finalPaiModTime
+        Write-Info "pai.exe last modified: $finalPaiModTime ($([math]::Round($timeSinceFinalPai.TotalMinutes, 2)) minutes ago)"
+    }
+    Write-Host ""
 } catch {
     Write-Warning "Could not verify version"
 }
